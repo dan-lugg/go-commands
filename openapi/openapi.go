@@ -2,9 +2,9 @@ package openapi
 
 import (
 	"fmt"
+	"github.com/dan-lugg/go-commands/commands"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3gen"
-	"go-commands-v2/commands"
 )
 
 func CreateOpenAPI3Paths(infos []commands.HandlerInfo) (paths *openapi3.Paths, err error) {
@@ -18,7 +18,7 @@ func CreateOpenAPI3Paths(infos []commands.HandlerInfo) (paths *openapi3.Paths, e
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate schema for request type %s: %w", info.ReqType.Name(), err)
 		}
-		
+
 		resSchemaRef, err = generator.GenerateSchemaRef(info.ResType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate schema for response type %s: %w", info.ResType.Name(), err)

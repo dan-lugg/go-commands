@@ -1,4 +1,4 @@
-module go-commands-v2
+module github.com/dan-lugg/go-commands
 
 go 1.23
 
