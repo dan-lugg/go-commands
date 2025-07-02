@@ -1,0 +1,22 @@
+package {{ .PackageName }}
+
+import (
+    "context"
+)
+
+type {{ .CommandName }}CommandReq struct {
+    // TODO: Define the request structure for the command
+}
+
+type {{ .CommandName }}CommandRes struct {
+    // TODO: Define the response structure for the command
+}
+
+type {{ .CommandName }}Handler struct {
+    // TODO: Add any additional dependencies needed for the command handler
+}
+
+func (h *{{ .CommandName }}CommandHandler) Handle(req {{ .CommandName }}CommandReq, ctx context.Context) (res {{ .CommandName }}CommandRes, err error) {
+    // TODO: Implement the command handling logic here
+    return {{ .CommandName }}CommandRes{}, nil
+}
