@@ -92,6 +92,7 @@ func Test_MappingRegistry_ByName(t *testing.T) {
 	t.Run("mapping not registered", func(t *testing.T) {
 		reqType, err := registry.ByName(SubReqName)
 		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrNotRegistered)
 		assert.Nil(t, reqType)
 	})
 }
@@ -109,6 +110,7 @@ func Test_MappingRegistry_ByType(t *testing.T) {
 	t.Run("mapping not registered", func(t *testing.T) {
 		reqType, err := registry.ByType(reflect.TypeFor[SubCommandReq]())
 		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrNotRegistered)
 		assert.Empty(t, reqType)
 	})
 }
@@ -169,6 +171,7 @@ func Test_DecoderRegistry_Decode(t *testing.T) {
 	t.Run("decoder not registered", func(t *testing.T) {
 		req, err := registry.Decode(reflect.TypeFor[SubCommandReq](), []byte(`#!`))
 		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrNotRegistered)
 		assert.Nil(t, req)
 	})
 }
@@ -280,15 +283,16 @@ func Test_HandlerRegistry_Handle(t *testing.T) {
 		return &AddHandler{}
 	})
 
-	t.Run("registered req", func(t *testing.T) {
+	t.Run("req type handler registered", func(t *testing.T) {
 		res, err := registry.Handle(AddCommandReq{ArgX: 3, ArgY: 4}, context.Background())
 		assert.NoError(t, err)
 		assert.Equal(t, AddCommandRes{Result: 7}, res)
 	})
 
-	t.Run("unregistered req", func(t *testing.T) {
+	t.Run("req type handler not registered", func(t *testing.T) {
 		res, err := registry.Handle(SubCommandReq{ArgX: 3, ArgY: 4}, context.Background())
 		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrNotRegistered)
 		assert.Nil(t, res)
 	})
 }

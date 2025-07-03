@@ -8,6 +8,10 @@ import (
 	"sync"
 )
 
+var (
+	ErrNotRegistered = fmt.Errorf("not registered")
+)
+
 // <editor-fold desc="Command">
 
 // CommandRes is an interface that represents the result of a command.
@@ -94,7 +98,7 @@ func (m *MappingRegistry) ByName(reqName string) (reqType reflect.Type, err erro
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 	if reqType, ok = m.nameMappings[reqName]; !ok {
-		return nil, fmt.Errorf("no mapping registered for reqName: %s", reqName)
+		return nil, fmt.Errorf("no mapping for reqName: %s, %w", reqName, ErrNotRegistered)
 	}
 	return reqType, nil
 }
@@ -118,7 +122,7 @@ func (m *MappingRegistry) ByType(reqType reflect.Type) (reqName string, err erro
 	defer m.mutex.RUnlock()
 	var ok bool
 	if reqName, ok = m.typeMappings[reqType]; !ok {
-		return "", fmt.Errorf("no mapping registered for reqType: %s", reqType)
+		return "", fmt.Errorf("no mapping for reqType: %s, %w", reqType, ErrNotRegistered)
 	}
 	return reqName, nil
 }
@@ -244,7 +248,7 @@ func (d *DecoderRegistry) Decode(reqType reflect.Type, reqJSON []byte) (CommandR
 	defer d.mutex.RUnlock()
 	factory, found := d.decoders[reqType]
 	if !found {
-		return nil, fmt.Errorf("no decoder registered for reqType: %s", reqType)
+		return nil, fmt.Errorf("no decoder for reqType: %s, %w", reqType, ErrNotRegistered)
 	}
 	return factory(reqJSON)
 }
@@ -442,7 +446,7 @@ func (r *HandlerRegistry) Handle(req CommandReq[CommandRes], ctx context.Context
 	reqType := reflect.TypeOf(req)
 	handler, found := r.adapters[reqType]
 	if !found {
-		return nil, fmt.Errorf("no handler registered for reqType: %s", reqType)
+		return nil, fmt.Errorf("no handler for reqType: %s, %w", reqType, ErrNotRegistered)
 	}
 	return handler.Handle(req, ctx)
 }

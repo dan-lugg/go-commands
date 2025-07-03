@@ -1,5 +1,7 @@
 # Go Commands
 
+![CI Build](https://github.com/dan-lugg/go-commands/actions/workflows/ci.yml/badge.svg)
+
 This repository provides a framework for handling commands in Go, including request decoding, handler registration, and
 execution. It simplifies the process of managing command requests and responses in a structured and extensible way.
 
@@ -103,18 +105,6 @@ if err != nil {
     log.Fatalf("Error handling request: %v", err)
 }
 fmt.Printf("Response: %+v\n", res)
-```
-
-### JSON Resolver
-
-Resolve JSON input into request names and data using the `JSONResolver`.
-
-```go
-resolver := &JSONResolver{}
-reqName, reqData, err := resolver.Resolve([]byte(`{"type": "add", "reqData": {"argX": 5, "argY": 3}}`))
-if err != nil {
-    log.Fatalf("Error resolving JSON: %v", err)
-}
 ```
 
 ## Testing
