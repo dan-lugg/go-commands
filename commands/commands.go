@@ -20,6 +20,61 @@ type CommandReq[TRes CommandRes] interface{}
 
 // </editor-fold>
 
+// <editor-fold desc="Mapping">
+
+type MappingRegistry struct {
+	mutex        sync.RWMutex
+	nameMappings map[string]reflect.Type
+	typeMappings map[reflect.Type]string
+}
+
+func NewMappingRegistry() *MappingRegistry {
+	return &MappingRegistry{
+		mutex:        sync.RWMutex{},
+		nameMappings: make(map[string]reflect.Type),
+		typeMappings: make(map[reflect.Type]string),
+	}
+}
+
+func (m *MappingRegistry) Register(reqName string, reqType reflect.Type) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if m.nameMappings == nil {
+		m.nameMappings = make(map[string]reflect.Type)
+	}
+	if m.typeMappings == nil {
+		m.typeMappings = make(map[reflect.Type]string)
+	}
+	m.nameMappings[reqName] = reqType
+	m.typeMappings[reqType] = reqName
+}
+
+func (m *MappingRegistry) ByName(reqName string) (reqType reflect.Type, err error) {
+	var ok bool
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	if reqType, ok = m.nameMappings[reqName]; !ok {
+		return nil, fmt.Errorf("no mapping registered for reqName: %s", reqName)
+	}
+	return reqType, nil
+}
+
+func (m *MappingRegistry) ByType(reqType reflect.Type) (reqName string, err error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	var ok bool
+	if reqName, ok = m.typeMappings[reqType]; !ok {
+		return "", fmt.Errorf("no mapping registered for reqType: %s", reqType)
+	}
+	return reqName, nil
+}
+
+func RegisterMapping[TReq CommandReq[CommandRes]](registry *MappingRegistry, reqName string) {
+	registry.Register(reqName, reflect.TypeFor[TReq]())
+}
+
+// </editor-fold>
+
 // <editor-fold desc="Decoder">
 
 // CommandReqDecoder is a function type that takes a byte slice as input
@@ -44,18 +99,17 @@ func DefaultCommandReqDecoder[TReq CommandReq[CommandRes]]() CommandReqDecoder {
 	}
 }
 
-// DecoderRegistry is a registry for managing mappings between request names,
+// DecoderRegistry is a registry for managing nameMappings between request names,
 // their corresponding types, and decoders. It allows decoding serialized
 // command request data into specific command request types.
 //
 // Fields:
-//   - mappings: A map that associates request names (strings) with their
+//   - nameMappings: A map that associates request names (strings) with their
 //     corresponding reflect.Type.
 //   - decoders: A map that associates reflect.Type with functions that
 //     decode serialized data into CommandReq[CommandRes].
 type DecoderRegistry struct {
 	mutex    sync.RWMutex
-	mappings map[string]reflect.Type
 	decoders map[reflect.Type]func([]byte) (CommandReq[CommandRes], error)
 }
 
@@ -65,7 +119,6 @@ type DecoderRegistry struct {
 func NewDecoderRegistry() *DecoderRegistry {
 	return &DecoderRegistry{
 		mutex:    sync.RWMutex{},
-		mappings: make(map[string]reflect.Type),
 		decoders: make(map[reflect.Type]func([]byte) (CommandReq[CommandRes], error)),
 	}
 }
@@ -79,19 +132,15 @@ func NewDecoderRegistry() *DecoderRegistry {
 //     into the specified command request type.
 //
 // Behavior:
-//   - Initializes the mappings and decoders maps if they are nil.
-//   - Associates the reqName with the reqType in the mappings map.
+//   - Initializes the nameMappings and decoders maps if they are nil.
+//   - Associates the reqName with the reqType in the nameMappings map.
 //   - Associates the reqType with the decoder function in the decoders map.
-func (d *DecoderRegistry) RegisterDecoder(reqName string, reqType reflect.Type, decoder CommandReqDecoder) {
+func (d *DecoderRegistry) Register(reqType reflect.Type, decoder CommandReqDecoder) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	if d.mappings == nil {
-		d.mappings = make(map[string]reflect.Type)
-	}
 	if d.decoders == nil {
 		d.decoders = make(map[reflect.Type]func([]byte) (CommandReq[CommandRes], error))
 	}
-	d.mappings[reqName] = reqType
 	d.decoders[reqType] = decoder
 }
 
@@ -105,91 +154,34 @@ func (d *DecoderRegistry) RegisterDecoder(reqName string, reqType reflect.Type, 
 // Behavior:
 //   - Associates the reqName with the reflect.Type of the generic type TReq in the registry.
 //   - Registers the provided decoder function for the TReq type in the registry.
-func RegisterDecoder[TReq CommandReq[CommandRes]](registry *DecoderRegistry, reqName string, decoder CommandReqDecoder) {
-	registry.RegisterDecoder(reqName, reflect.TypeFor[TReq](), decoder)
+func RegisterDecoder[TReq CommandReq[CommandRes]](registry *DecoderRegistry, decoder CommandReqDecoder) {
+	registry.Register(reflect.TypeFor[TReq](), decoder)
 }
 
 // Decode attempts to decode serialized command request data into a specific command request type.
 //
 // Parameters:
 //   - reqName: The name of the request type to decode.
-//   - reqData: A byte slice containing the serialized command request data.
+//   - reqJSON: A byte slice containing the serialized command request data.
 //
 // Returns:
 //   - A CommandReq[CommandRes] representing the decoded command request.
 //   - An error if the decoding fails or if no decoder is registered for the given request name.
 //
 // Behavior:
-//   - Looks up the reqType associated with the reqName in the mappings map.
+//   - Looks up the reqType associated with the reqName in the nameMappings map.
 //   - If no reqType is found, returns an error indicating the request name is not registered.
 //   - Retrieves the decoder function associated with the reqType from the decoders map.
 //   - If no decoder is found, returns an error indicating the type is not registered.
-//   - Uses the decoder function to decode the reqData into the corresponding command request type.
-func (d *DecoderRegistry) Decode(reqName string, reqData []byte) (CommandReq[CommandRes], error) {
+//   - Uses the decoder function to decode the reqJSON into the corresponding command request type.
+func (d *DecoderRegistry) Decode(reqType reflect.Type, reqJSON []byte) (CommandReq[CommandRes], error) {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
-	reqType, found := d.mappings[reqName]
-	if !found {
-		return nil, fmt.Errorf("no command type registered for reqName: %s", reqName)
-	}
 	factory, found := d.decoders[reqType]
 	if !found {
-		return nil, fmt.Errorf("no command decoder registered for type: %s", reqData)
+		return nil, fmt.Errorf("no decoder registered for reqType: %s", reqType)
 	}
-	return factory(reqData)
-}
-
-// Resolver is a generic interface for resolving input data into a request name and request data.
-//
-// Type Parameters:
-//   - TAny: The type of the input data to be resolved.
-//
-// Methods:
-//   - Resolve(input TAny) (reqName string, reqData []byte, err error):
-//     Resolves the input data into a request name (reqName) and request data (reqData).
-//     Returns an error (err) if the resolution fails.
-type Resolver[TAny any] interface {
-	Resolve(input TAny) (reqName string, reqData []byte, err error)
-}
-
-// JSONResolver is a type that implements the Resolver interface for resolving
-// JSON input data into a request name and request data.
-//
-// Fields:
-//   - Resolver[[]byte]: Embeds the generic Resolver interface for handling
-//     byte slice input.
-//
-// Methods:
-//   - Resolve(input []byte) (reqName string, reqData []byte, err error):
-//     Resolves the input JSON data into a request name (reqName) and request
-//     data (reqData). Returns an error (err) if the resolution fails.
-type JSONResolver struct {
-	Resolver[[]byte]
-}
-
-// Resolve parses the input JSON data and extracts the request name (reqName) and request data (reqData).
-//
-// Parameters:
-//   - input: A byte slice containing the JSON data to be resolved.
-//
-// Returns:
-//   - reqName: The name of the request type extracted from the JSON.
-//   - reqData: The raw JSON data associated with the request.
-//   - err: An error if the JSON unmarshalling fails.
-//
-// Behavior:
-//   - Unmarshals the input JSON into a struct containing TypeName and reqData fields.
-//   - Returns the TypeName as reqName and the reqData as reqData.
-//   - If unmarshalling fails, returns an error indicating the failure.
-func (b *JSONResolver) Resolve(input []byte) (reqName string, reqData []byte, err error) {
-	var wrapped struct {
-		TypeName string          `json:"type"`
-		Data     json.RawMessage `json:"reqData"`
-	}
-	if err = json.Unmarshal(input, &wrapped); err != nil {
-		return "", nil, fmt.Errorf("failed resolve reqName and reqData: %w", err)
-	}
-	return wrapped.TypeName, wrapped.Data, nil
+	return factory(reqJSON)
 }
 
 // </editor-fold>
@@ -321,7 +313,7 @@ func (a *DefaultHandlerAdapter[TReq, TRes]) ResType() reflect.Type {
 	return reflect.TypeFor[TRes]()
 }
 
-// HandlerRegistry is a registry for managing mappings between request types
+// HandlerRegistry is a registry for managing nameMappings between request types
 // and their corresponding handler adapters.
 //
 // Fields:
@@ -358,6 +350,9 @@ func NewHandlerRegistry() *HandlerRegistry {
 func (r *HandlerRegistry) Register(adapter HandlerAdapter) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+	if r.adapters == nil {
+		r.adapters = make(map[reflect.Type]HandlerAdapter)
+	}
 	r.adapters[adapter.ReqType()] = adapter
 }
 
@@ -382,7 +377,7 @@ func (r *HandlerRegistry) Handle(req CommandReq[CommandRes], ctx context.Context
 	reqType := reflect.TypeOf(req)
 	handler, found := r.adapters[reqType]
 	if !found {
-		return nil, fmt.Errorf("no handler registered for request type: %s", reqType)
+		return nil, fmt.Errorf("no handler registered for reqType: %s", reqType)
 	}
 	return handler.Handle(req, ctx)
 }
@@ -404,47 +399,22 @@ func RegisterHandler[TReq CommandReq[TRes], TRes CommandRes](registry *HandlerRe
 	registry.Register(NewDefaultHandlerAdapter(factory))
 }
 
-// HandlerInfo represents metadata about a handler, including its request name,
-// request type, and response type.
+// TypeMap returns a mapping of request types to their corresponding response types.
 //
-// Fields:
-//   - ReqName: The name of the request type handled by the handler.
-//   - ReqType: The reflect.Type of the request type.
-//   - ResType: The reflect.Type of the response type.
-type HandlerInfo struct {
-	ReqName string
-	ReqType reflect.Type
-	ResType reflect.Type
-}
-
-// Infos retrieves metadata about all registered handlers in the HandlerRegistry.
+// The method iterates over the registered adapters in the HandlerRegistry
+// and constructs a map where the keys are the request types (reflect.Type)
+// and the values are the response types (reflect.Type) produced by the adapters.
 //
 // Returns:
-//   - infos: A slice of HandlerInfo containing details about each registered handler,
-//     including its request name, request type, and response type.
-//
-// Behavior:
-//   - Iterates over all registered handler adapters in the registry.
-//   - Constructs a HandlerInfo for each adapter, including its request name,
-//     request type, and response type.
-//   - Returns the slice of HandlerInfo containing metadata for all handlers.
-//
-// Note:
-//   - The ReqName field currently uses the name of the request type (ReqType.Name()),
-//     but it may need to be mapped from the decoders for more accurate naming.
-func (r *HandlerRegistry) Infos() (infos []HandlerInfo) {
+//   - typeMap: A map associating request types with their corresponding response types.
+func (r *HandlerRegistry) TypeMap() (typeMap map[reflect.Type]reflect.Type) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	infos = make([]HandlerInfo, 0, len(r.adapters))
-	for _, adapter := range r.adapters {
-		info := HandlerInfo{
-			ReqName: adapter.ReqType().Name(), // TODO: Need to map this from the decoders somehow
-			ReqType: adapter.ReqType(),
-			ResType: adapter.ResType(),
-		}
-		infos = append(infos, info)
+	typeMap = make(map[reflect.Type]reflect.Type, len(r.adapters))
+	for reqType, adapter := range r.adapters {
+		typeMap[reqType] = adapter.ResType()
 	}
-	return infos
+	return typeMap
 }
 
 // </editor-fold>

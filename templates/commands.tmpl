@@ -16,7 +16,7 @@ type {{ .CommandName }}Handler struct {
     // TODO: Add any additional dependencies needed for the command handler
 }
 
-func (h *{{ .CommandName }}CommandHandler) Handle(req {{ .CommandName }}CommandReq, ctx context.Context) (res {{ .CommandName }}CommandRes, err error) {
+func (h *{{ .CommandName }}Handler) Handle(req {{ .CommandName }}CommandReq, ctx context.Context) (res {{ .CommandName }}CommandRes, err error) {
     // TODO: Implement the command handling logic here
     return {{ .CommandName }}CommandRes{}, nil
 }
