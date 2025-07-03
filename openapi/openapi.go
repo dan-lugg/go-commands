@@ -63,7 +63,7 @@ func (w *SpecWriter) CreatePathItem(reqName string, reqType reflect.Type, resTyp
 
 	resSchemaRef, err = generator.GenerateSchemaRef(resType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate schema for response type %s: %w", resType.Name(), err)
+		return openapi3.PathItem{}, fmt.Errorf("failed to generate schema for response type %s: %w", resType.Name(), err)
 	}
 
 	operation := &openapi3.Operation{
