@@ -22,12 +22,27 @@ type CommandReq[TRes CommandRes] interface{}
 
 // <editor-fold desc="Mapping">
 
+// MappingRegistry is a registry for managing mappings between request names and types.
+//
+// Fields:
+//   - mutex: A sync.RWMutex used to ensure thread-safe access to the registry.
+//   - nameMappings: A map that associates request names (strings) with their corresponding reflect.Type.
+//   - typeMappings: A map that associates reflect.Type with their corresponding request names (strings).
 type MappingRegistry struct {
 	mutex        sync.RWMutex
 	nameMappings map[string]reflect.Type
 	typeMappings map[reflect.Type]string
 }
 
+// NewMappingRegistry creates and returns a new instance of MappingRegistry.
+//
+// The registry is initialized with:
+//   - A sync.RWMutex for thread-safe access.
+//   - nameMappings: A map associating request names (strings) with their corresponding reflect.Type.
+//   - typeMappings: A map associating reflect.Type with their corresponding request names (strings).
+//
+// Returns:
+//   - A pointer to a MappingRegistry instance.
 func NewMappingRegistry() *MappingRegistry {
 	return &MappingRegistry{
 		mutex:        sync.RWMutex{},
@@ -36,6 +51,17 @@ func NewMappingRegistry() *MappingRegistry {
 	}
 }
 
+// Register adds a mapping between a request name and its corresponding type.
+//
+// Parameters:
+//   - reqName: A string representing the name of the request.
+//   - reqType: A reflect.Type representing the type of the request.
+//
+// Behavior:
+//   - Ensures thread-safe access to the registry using a mutex.
+//   - Initializes the nameMappings and typeMappings maps if they are nil.
+//   - Associates the reqName with the reqType in the nameMappings map.
+//   - Associates the reqType with the reqName in the typeMappings map.
 func (m *MappingRegistry) Register(reqName string, reqType reflect.Type) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -49,6 +75,20 @@ func (m *MappingRegistry) Register(reqName string, reqType reflect.Type) {
 	m.typeMappings[reqType] = reqName
 }
 
+// ByName retrieves the reflect.Type associated with the given request name (reqName).
+//
+// Parameters:
+//   - reqName: A string representing the name of the request.
+//
+// Returns:
+//   - reqType: The reflect.Type associated with the given request name.
+//   - err: An error if no mapping is registered for the given request name.
+//
+// Behavior:
+//   - Acquires a read lock to ensure thread-safe access to the nameMappings map.
+//   - Checks if the reqName exists in the nameMappings map.
+//   - If the reqName is not found, returns an error indicating the mapping is not registered.
+//   - If the reqName is found, returns the associated reflect.Type.
 func (m *MappingRegistry) ByName(reqName string) (reqType reflect.Type, err error) {
 	var ok bool
 	m.mutex.RLock()
@@ -59,6 +99,20 @@ func (m *MappingRegistry) ByName(reqName string) (reqType reflect.Type, err erro
 	return reqType, nil
 }
 
+// ByType retrieves the request name associated with the given request type (reqType).
+//
+// Parameters:
+//   - reqType: A reflect.Type representing the type of the request.
+//
+// Returns:
+//   - reqName: A string representing the name of the request associated with the given type.
+//   - err: An error if no mapping is registered for the given request type.
+//
+// Behavior:
+//   - Acquires a read lock to ensure thread-safe access to the typeMappings map.
+//   - Checks if the reqType exists in the typeMappings map.
+//   - If the reqType is not found, returns an error indicating the mapping is not registered.
+//   - If the reqType is found, returns the associated request name.
 func (m *MappingRegistry) ByType(reqType reflect.Type) (reqName string, err error) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -69,6 +123,17 @@ func (m *MappingRegistry) ByType(reqType reflect.Type) (reqName string, err erro
 	return reqName, nil
 }
 
+// RegisterMapping registers a mapping between a request name and its corresponding type.
+//
+// Type Parameters:
+//   - TReq: The type of the command request, which must implement the CommandReq interface.
+//
+// Parameters:
+//   - registry: A pointer to the MappingRegistry where the mapping will be registered.
+//   - reqName: A string representing the name of the request.
+//
+// Behavior:
+//   - Associates the reqName with the reflect.Type of the generic type TReq in the registry.
 func RegisterMapping[TReq CommandReq[CommandRes]](registry *MappingRegistry, reqName string) {
 	registry.Register(reqName, reflect.TypeFor[TReq]())
 }
