@@ -48,7 +48,7 @@ func TestInsert(t *testing.T) {
 	})
 }
 
-func TestManager_Handle(t *testing.T) {
+func Test_Manager_HandleRaw(t *testing.T) {
 	mappingCatalog := NewMappingCatalog()
 	decoderCatalog := NewDecoderCatalog()
 	handlerCatalog := NewHandlerCatalog()
@@ -58,15 +58,84 @@ func TestManager_Handle(t *testing.T) {
 	})
 
 	t.Run("valid request", func(t *testing.T) {
-		res, err := manager.Handle(AddReqName, []byte(`{"argX": 3, "argY": 4}`), context.Background())
+		res, err := manager.HandleRaw(AddReqName, []byte(`{"argX": 3, "argY": 4}`), context.Background())
 		assert.NoError(t, err)
 		assert.Equal(t, AddCommandRes{Result: 7}, res)
 	})
 
 	t.Run("invalid request", func(t *testing.T) {
-		res, err := manager.Handle(SubReqName, []byte(`{"argX": 3, "argY": 4}`), context.Background())
+		res, err := manager.HandleRaw(SubReqName, []byte(`{"argX": 3, "argY": 4}`), context.Background())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, util.ErrNotCataloged)
 		assert.Nil(t, res)
+	})
+}
+
+func Test_HandleRaw(t *testing.T) {
+	mappingCatalog := NewMappingCatalog()
+	decoderCatalog := NewDecoderCatalog()
+	handlerCatalog := NewHandlerCatalog()
+	manager := NewManager(mappingCatalog, decoderCatalog, handlerCatalog)
+	Insert[AddCommandReq, AddCommandRes](manager, AddReqName, DefaultDecoder[AddCommandReq](), func() Handler[AddCommandReq, AddCommandRes] {
+		return &AddHandler{}
+	})
+
+	t.Run("valid request", func(t *testing.T) {
+		res, err := HandleRaw(manager, AddReqName, []byte(`{"argX": 3, "argY": 4}`), context.Background())
+		assert.NoError(t, err)
+		assert.Equal(t, AddCommandRes{Result: 7}, res)
+	})
+
+	t.Run("invalid request", func(t *testing.T) {
+		res, err := HandleRaw(manager, SubReqName, []byte(`{"argX": 3, "argY": 4}`), context.Background())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, util.ErrNotCataloged)
+		assert.Nil(t, res)
+	})
+}
+
+func Test_Manager_HandleReq(t *testing.T) {
+	mappingCatalog := NewMappingCatalog()
+	decoderCatalog := NewDecoderCatalog()
+	handlerCatalog := NewHandlerCatalog()
+	manager := NewManager(mappingCatalog, decoderCatalog, handlerCatalog)
+	Insert[AddCommandReq, AddCommandRes](manager, AddReqName, DefaultDecoder[AddCommandReq](), func() Handler[AddCommandReq, AddCommandRes] {
+		return &AddHandler{}
+	})
+
+	t.Run("valid request", func(t *testing.T) {
+		res, err := manager.HandleReq(AddCommandReq{ArgX: 3, ArgY: 4}, context.Background())
+		assert.NoError(t, err)
+		assert.Equal(t, AddCommandRes{Result: 7}, res)
+	})
+
+	t.Run("invalid request", func(t *testing.T) {
+		res, err := manager.HandleReq(SubCommandReq{ArgX: 3, ArgY: 4}, context.Background())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, util.ErrNotCataloged)
+		assert.Nil(t, res)
+	})
+}
+
+func Test_HandleReq(t *testing.T) {
+	mappingCatalog := NewMappingCatalog()
+	decoderCatalog := NewDecoderCatalog()
+	handlerCatalog := NewHandlerCatalog()
+	manager := NewManager(mappingCatalog, decoderCatalog, handlerCatalog)
+	Insert[AddCommandReq, AddCommandRes](manager, AddReqName, DefaultDecoder[AddCommandReq](), func() Handler[AddCommandReq, AddCommandRes] {
+		return &AddHandler{}
+	})
+
+	t.Run("valid request", func(t *testing.T) {
+		res, err := HandleReq[AddCommandReq, AddCommandRes](manager, AddCommandReq{ArgX: 3, ArgY: 4}, context.Background())
+		assert.NoError(t, err)
+		assert.Equal(t, AddCommandRes{Result: 7}, res)
+	})
+
+	t.Run("invalid request", func(t *testing.T) {
+		res, err := HandleReq[SubCommandReq, SubCommandRes](manager, SubCommandReq{ArgX: 3, ArgY: 4}, context.Background())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, util.ErrNotCataloged)
+		assert.Zero(t, res)
 	})
 }

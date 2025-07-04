@@ -127,7 +127,7 @@ func (w *SpecWriter) CreatePathItem(reqName string, reqType reflect.Type, resTyp
 	}
 
 	operation := &openapi3.Operation{
-		Summary:     fmt.Sprintf("Handle %s", reqName),
+		Summary:     fmt.Sprintf("HandleRaw %s", reqName),
 		Description: fmt.Sprintf("Handles the %s command", reqName),
 		OperationID: reqName,
 	}

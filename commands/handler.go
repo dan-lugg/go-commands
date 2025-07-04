@@ -15,7 +15,7 @@ import (
 //   - TRes: The type of the command response, which must implement the CommandRes interface.
 //
 // Methods:
-//   - Handle(req TReq, ctx context.Context) (res TRes, err error):
+//   - HandleRaw(req TReq, ctx context.Context) (res TRes, err error):
 //     Processes the given command request (req) within the provided context (ctx).
 //     Returns the command response (res) and an error (err) if the handling fails.
 type Handler[TReq CommandReq[TRes], TRes CommandRes] interface {
@@ -37,7 +37,7 @@ type HandlerFactory[TReq CommandReq[TRes], TRes CommandRes] func() Handler[TReq,
 // Methods:
 //   - ReqType(): Returns the reflect.Type of the request handled by the adapter.
 //   - ResType(): Returns the reflect.Type of the response produced by the adapter.
-//   - Handle(req CommandReq[CommandRes], ctx context.Context): Processes the given request (req) within the provided context (ctx),
+//   - HandleRaw(req CommandReq[CommandRes], ctx context.Context): Processes the given request (req) within the provided context (ctx),
 //     returning the response (res) or an error (err) if the handling fails.
 type HandlerAdapter interface {
 	ReqType() reflect.Type
@@ -79,7 +79,7 @@ func NewDefaultHandlerAdapter[TReq CommandReq[TRes], TRes CommandRes](factory fu
 	}
 }
 
-// Handle processes the given request (req) within the provided context (ctx).
+// HandleRaw processes the given request (req) within the provided context (ctx).
 //
 // Type Parameters:
 //   - TReq: The type of the command request, which must implement the CommandReq interface.
@@ -182,7 +182,7 @@ func (r *HandlerCatalog) Insert(adapter HandlerAdapter) {
 	r.adapters[adapter.ReqType()] = adapter
 }
 
-// Handle processes a command request using the cataloged handler.
+// HandleRaw processes a command request using the cataloged handler.
 //
 // Parameters:
 //   - req: A CommandReq[CommandRes] representing the command request to be processed.
