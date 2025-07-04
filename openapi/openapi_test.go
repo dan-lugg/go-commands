@@ -59,11 +59,27 @@ func (h *SubHandler) Handle(req SubCommandReq, ctx context.Context) (res SubComm
 // <editor-fold desc="Tests">
 
 func TestNewSpecWriter(t *testing.T) {
-	mappingCatalog := commands.NewMappingCatalog()
-	handlerCatalog := commands.NewHandlerCatalog()
-	specWriter := NewSpecWriter(mappingCatalog, handlerCatalog)
-	assert.Equal(t, specWriter.mappingCatalog, mappingCatalog)
-	assert.Equal(t, specWriter.handlerCatalog, handlerCatalog)
+	t.Run("default", func(t *testing.T) {
+		mappingCatalog := commands.NewMappingCatalog()
+		handlerCatalog := commands.NewHandlerCatalog()
+		specWriter := NewSpecWriter(mappingCatalog, handlerCatalog)
+		assert.Equal(t, specWriter.mappingCatalog, mappingCatalog)
+		assert.Equal(t, specWriter.handlerCatalog, handlerCatalog)
+	})
+
+	t.Run("with options", func(t *testing.T) {
+		mappingCatalog := commands.NewMappingCatalog()
+		handlerCatalog := commands.NewHandlerCatalog()
+		specWriter := NewSpecWriter(mappingCatalog, handlerCatalog,
+			WithTitle("Test API"),
+			WithVersion("2.0.0"),
+			WithDescription("Test API for handling commands"))
+		assert.Equal(t, specWriter.mappingCatalog, mappingCatalog)
+		assert.Equal(t, specWriter.handlerCatalog, handlerCatalog)
+		assert.Equal(t, specWriter.title, "Test API")
+		assert.Equal(t, specWriter.version, "2.0.0")
+		assert.Equal(t, specWriter.description, "Test API for handling commands")
+	})
 }
 
 func TestSpecWriter_CreatePathItem(t *testing.T) {
