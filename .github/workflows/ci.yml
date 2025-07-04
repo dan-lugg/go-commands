@@ -30,6 +30,7 @@ jobs:
           config: ./.testcoverage.yml
   version:
     runs-on: ubuntu-latest
+    permissions: write-all
     steps:
       - uses: actions/checkout@master
       - name: bump version
