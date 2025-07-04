@@ -1,6 +1,7 @@
 # Go Commands
 
 ![CI Build](https://github.com/dan-lugg/go-commands/actions/workflows/ci.yml/badge.svg)
+![GitHub Tag](https://img.shields.io/github/v/tag/dan-lugg/go-commands?style=flat)
 
 This repository provides a framework for handling commands in Go, including request decoding, handler registration, and
 execution. It simplifies the process of managing command requests and responses in a structured and extensible way.
