@@ -2,21 +2,25 @@ package {{ .PackageName }}
 
 import (
     "context"
+    "fmt"
+    "github.com/dan-lugg/go-commands/commands"
 )
-
-type {{ .CommandName }}CommandReq struct {
-    // TODO: Define the request structure for the command
-}
 
 type {{ .CommandName }}CommandRes struct {
     // TODO: Define the response structure for the command
 }
 
+type {{ .CommandName }}CommandReq struct {
+    commands.CommandReq[{{ .CommandName }}CommandRes]
+    // TODO: Define the request structure for the command
+}
+
 type {{ .CommandName }}Handler struct {
+    commands.Handler[{{ .CommandName }}CommandReq, {{ .CommandName }}CommandRes]
     // TODO: Add any additional dependencies needed for the command handler
 }
 
 func (h *{{ .CommandName }}Handler) Handle(req {{ .CommandName }}CommandReq, ctx context.Context) (res {{ .CommandName }}CommandRes, err error) {
     // TODO: Implement the command handling logic here
-    return {{ .CommandName }}CommandRes{}, nil
+    return {{ .CommandName }}CommandRes{}, fmt.Errorf("not implemented")
 }

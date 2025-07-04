@@ -59,17 +59,17 @@ func (h *SubHandler) Handle(req SubCommandReq, ctx context.Context) (res SubComm
 // <editor-fold desc="Tests">
 
 func TestNewSpecWriter(t *testing.T) {
-	mappingRegistry := commands.NewMappingRegistry()
-	handlerRegistry := commands.NewHandlerRegistry()
-	specWriter := NewSpecWriter(mappingRegistry, handlerRegistry)
-	assert.Equal(t, specWriter.mappingRegistry, mappingRegistry)
-	assert.Equal(t, specWriter.handlerRegistry, handlerRegistry)
+	mappingCatalog := commands.NewMappingCatalog()
+	handlerCatalog := commands.NewHandlerCatalog()
+	specWriter := NewSpecWriter(mappingCatalog, handlerCatalog)
+	assert.Equal(t, specWriter.mappingCatalog, mappingCatalog)
+	assert.Equal(t, specWriter.handlerCatalog, handlerCatalog)
 }
 
 func TestSpecWriter_CreatePathItem(t *testing.T) {
-	mappingRegistry := commands.NewMappingRegistry()
-	handlerRegistry := commands.NewHandlerRegistry()
-	specWriter := NewSpecWriter(mappingRegistry, handlerRegistry)
+	mappingCatalog := commands.NewMappingCatalog()
+	handlerCatalog := commands.NewHandlerCatalog()
+	specWriter := NewSpecWriter(mappingCatalog, handlerCatalog)
 	reqType := reflect.TypeFor[AddCommandReq]()
 	resType := reflect.TypeFor[AddCommandRes]()
 	pathItem, err := specWriter.CreatePathItem("add", reqType, resType)
@@ -78,25 +78,21 @@ func TestSpecWriter_CreatePathItem(t *testing.T) {
 }
 
 func TestSpecWriter_WriteSpec(t *testing.T) {
-	const ExpectSpec = `{"/add":{"post":{"description":"Handles the add command","operationId":"add","requestBody":{"content":{"application/json":{"schema":{"properties":{"argX":{"$ref":"int"},"argY":{"$ref":"int"}},"type":"object"}}},"required":true},"responses":{"200":{"content":{"application/json":{"schema":{"properties":{"result":{"$ref":"int"}},"type":"object"}}}},"default":{"description":""}},"summary":"Handle add"}},"/sub":{"post":{"description":"Handles the sub command","operationId":"sub","requestBody":{"content":{"application/json":{"schema":{"properties":{"argX":{"$ref":"int"},"argY":{"$ref":"int"}},"type":"object"}}},"required":true},"responses":{"200":{"content":{"application/json":{"schema":{"properties":{"result":{"$ref":"int"}},"type":"object"}}}},"default":{"description":""}},"summary":"Handle sub"}}}`
-
-	mappingRegistry := commands.NewMappingRegistry()
-	handlerRegistry := commands.NewHandlerRegistry()
-	specWriter := NewSpecWriter(mappingRegistry, handlerRegistry)
-
-	commands.RegisterHandler[AddCommandReq, AddCommandRes](handlerRegistry, func() commands.Handler[AddCommandReq, AddCommandRes] {
+	const ExpectSpec = `{"info":{"description":"API for handling commands","title":"Commands API","version":"1.0.0"},"openapi":"3.0.0","paths":{"/add":{"post":{"description":"Handles the add command","operationId":"add","requestBody":{"content":{"application/json":{"schema":{"properties":{"argX":{"$ref":"int"},"argY":{"$ref":"int"}},"type":"object"}}},"required":true},"responses":{"200":{"content":{"application/json":{"schema":{"properties":{"result":{"$ref":"int"}},"type":"object"}}}},"default":{"description":""}},"summary":"Handle add"}},"/sub":{"post":{"description":"Handles the sub command","operationId":"sub","requestBody":{"content":{"application/json":{"schema":{"properties":{"argX":{"$ref":"int"},"argY":{"$ref":"int"}},"type":"object"}}},"required":true},"responses":{"200":{"content":{"application/json":{"schema":{"properties":{"result":{"$ref":"int"}},"type":"object"}}}},"default":{"description":""}},"summary":"Handle sub"}}}}`
+	mappingCatalog := commands.NewMappingCatalog()
+	handlerCatalog := commands.NewHandlerCatalog()
+	specWriter := NewSpecWriter(mappingCatalog, handlerCatalog)
+	commands.InsertHandler[AddCommandReq, AddCommandRes](handlerCatalog, func() commands.Handler[AddCommandReq, AddCommandRes] {
 		return &AddHandler{}
 	})
-	commands.RegisterHandler[SubCommandReq, SubCommandRes](handlerRegistry, func() commands.Handler[SubCommandReq, SubCommandRes] {
+	commands.InsertHandler[SubCommandReq, SubCommandRes](handlerCatalog, func() commands.Handler[SubCommandReq, SubCommandRes] {
 		return &SubHandler{}
 	})
-
-	commands.RegisterMapping[AddCommandReq](mappingRegistry, AddReqName)
-	commands.RegisterMapping[SubCommandReq](mappingRegistry, SubReqName)
+	commands.InsertMapping[AddCommandReq](mappingCatalog, AddReqName)
+	commands.InsertMapping[SubCommandReq](mappingCatalog, SubReqName)
 	data := []byte{}
 	buffer := bytes.NewBuffer(data)
 	writer := io.Writer(buffer)
-
 	err := specWriter.WriteSpec(writer)
 	assert.NoError(t, err)
 	assert.Equal(t, strings.TrimSpace(ExpectSpec), strings.TrimSpace(buffer.String()))
