@@ -33,6 +33,9 @@ jobs:
     steps:
       - uses: actions/checkout@master
       - name: bump version
-        uses: hennejg/github-tag-action@v4.1.jh1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+        uses: anothrNick/github-tag-action@v1 # Don't use @master or @v1 unless you're happy to test the latest version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # if you don't want to set write permissions use a PAT token
+          DEFAULT_BUMP: patch
+          TAG_PREFIX: v
+        
