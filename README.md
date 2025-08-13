@@ -4,113 +4,230 @@
 ![GitHub Tag](https://img.shields.io/github/v/tag/dan-lugg/go-commands?style=flat)
 
 This repository provides a framework for handling commands in Go, including request decoding, handler registration, and
-execution. It simplifies the process of managing command requests and responses in a structured and extensible way.
+execution. It simplifies the process of managing command requests and results in a structured and extensible way.
 
 ## Features
 
-- **Command Request and Response Interfaces**: Define generic interfaces for command requests and responses.
-- **Decoder Registry**: Manage mappings between request names, types, and decoders for serialized data.
-- **Handler Registry**: Register and manage handlers for processing command requests.
-- **Default Handler Adapter**: Adapt handlers to a common structure for consistent processing.
-- **JSON Resolver**: Resolve JSON input into request names and data.
+- **Command Request and Result Interfaces**:
+    - Define generic interfaces for command requests and results, enabling type-safe and reusable command structures.
+- **Handler Catalog**:
+    - Register and manage handlers for processing command requests, ensuring modular and extensible command execution.
+- **Mapping Catalog**:
+    - Map request names to types for easier integration with external systems.
+- **Decoder Catalog**:
+    - Manage mappings between request types and decoders for serialized data, allowing flexible deserialization of
+      incoming requests.
+- **Future Support**: Asynchronous processing of commands using `futures.Future`.
 
 ## Installation
 
 Ensure you have Go installed. Clone the repository and run:
 
 ```bash
-go mod tidy
+go get github.com/dan-lugg/go-commands
 ```
 
-This will install all required dependencies.
+This will install all required dependencies and prepare the project for development.
 
 ## Usage
 
-### Command Request and Response
+### Defining Commands
 
-Define your command request and response types by implementing the `CommandReq` and `CommandRes` interfaces.
+Define your command request and result types by implementing the `CommandReq` and `CommandRes` interfaces. These
+interfaces ensure that your commands are structured and type-safe.
 
 ```go
-type AddCommandReq struct {
-	ArgX int `json:"argX"`
-	ArgY int `json:"argY"`
-}
+package example
 
+import "github.com/dan-lugg/go-commands/commands"
+
+// AddCommandRes represents the result for an Add command.
 type AddCommandRes struct {
-	Result int `json:"result"`
+	// Embed the CommandRes interface to ensure compatibility with the framework.
+	commands.CommandRes
+
+	// Result of the Add command.
+	Result int
 }
 
-type SubCommandReq struct {
-	ArgX int `json:"argX"`
-	ArgY int `json:"argY"`
+// AddCommandReq represents the request for an Add command.
+type AddCommandReq struct {
+	// Embed the CommandReq interface to ensure compatibility with the framework.
+	commands.CommandReq[AddCommandReq]
+
+	// Arguments for the Add command.
+	ArgX int
+	ArgY int
 }
 
-type SubCommandRes struct {
-	Result int `json:"result"`
-}
-```
-
-### Registering Decoders
-
-Use the `DecoderRegistry` to register decoders for your command request types.
-
-```go
-decoderRegistry := NewDecoderRegistry()
-RegisterDecoder[AddCommandReq](decoderRegistry, "add", DefaultCommandReqDecoder[AddCommandReq]())
-RegisterDecoder[SubCommandReq](decoderRegistry, "sub", DefaultCommandReqDecoder[SubCommandReq]())
 ```
 
 ### Registering Handlers
 
-Define handlers for your command requests by implementing the `Handler` interface.
+Define handlers for your command requests by implementing the `Handler` interface. Handlers process the command requests
+and return the corresponding results.
 
 ```go
+package example
+
+import "context"
+
+// AddHandler processes AddCommandReq and returns AddCommandRes.
 type AddHandler struct {
-    commands.Handler[AddCommandReq, AddCommandRes]
+	// Embed the Handler interface to ensure compatibility with the framework.
+	Handler[AddCommandReq, AddCommandRes]
 }
 
-func (h *AddHandler) Handle(req AddCommandReq, ctx context.Context) (res AddCommandRes, err error) {
-    result := req.ArgX + req.ArgY
-    return AddCommandRes{Result: result}, nil
+// Handle processes the AddCommandReq and returns an AddCommandRes.
+func (h *AddHandler) Handle(ctx context.Context, req AddCommandReq) (AddCommandRes, error) {
+	return AddCommandRes{Result: req.ArgX + req.ArgY}, nil
 }
 
-type SubHandler struct {
-    commands.Handler[SubCommandReq, SubCommandRes]
-}
-
-func (h *SubHandler) Handle(req SubCommandReq, ctx context.Context) (res SubCommandRes, err error) {
-    result := req.ArgX - req.ArgY
-    return SubCommandRes{Result: result}, nil
-}
 ```
 
-Use the `HandlerRegistry` to register handlers for your command request types.
+Register these handlers using the `HandlerCatalog`.
 
 ```go
-handlerRegistry := NewHandlerRegistry()
-RegisterHandler[AddCommandReq, AddCommandRes](handlerRegistry, func () Handler[AddCommandReq, AddCommandRes] {
-    return &AddHandler{}
-})
-RegisterHandler[SubCommandReq, SubCommandRes](handlerRegistry, func () Handler[SubCommandReq, SubCommandRes] {
-    return &SubHandler{}
-})
+package example
+
+import "github.com/dan-lugg/go-commands/commands"
+
+func exampleHandlerRegistration() {
+	// Create a new HandlerCatalog
+	handlerCatalog := commands.NewHandlerCatalog()
+
+	// Register the AddHandler
+	commands.InsertHandler[AddCommandReq, AddCommandRes](
+		handlerCatalog,
+		func() Handler[AddCommandReq, AddCommandRes] {
+			return &AddHandler{}
+		},
+	)
+
+	// Register the SubHandler
+	commands.InsertHandler(
+		handlerCatalog,
+		func() commands.Handler[SubCommandReq, SubCommandRes] {
+			return &SubHandler{}
+		},
+	)
+}
+
 ```
 
 ### Handling Requests
 
-Use the `HandlerRegistry` to process command requests.
+Use the `HandlerCatalog` to process command requests. The catalog will route the request to the appropriate handler
+based on its type.
 
 ```go
-res, err := handlerRegistry.Handle(AddCommandReq{ArgX: 5, ArgY: 3}, context.Background())
-if err != nil {
-    log.Fatalf("Error handling request: %v", err)
+package example
+
+import (
+	"fmt"
+	"github.com/dan-lugg/go-commands/commands"
+	"log"
+)
+
+func exampleRequestHandling() {
+	// Create a new HandlerCatalog
+	handlerCatalog := commands.NewHandlerCatalog()
+
+	// Register handlers
+	exampleHandlerRegistration()
+
+	// Create a command request
+	req := AddCommandReq{ArgX: 5, ArgY: 3}
+
+	// Handle the request
+	res, err := commands.Handle[AddCommandReq, AddCommandRes](context.Background(), handlerCatalog, req)
+	if err != nil {
+		log.Fatalf("error handling request: %v", err)
+	}
+
+	fmt.Printf("result: %+v\n", res)
 }
-fmt.Printf("Response: %+v\n", res)
+
+```
+
+### Asynchronous Processing
+
+The `Future` function allows you to process commands asynchronously.
+
+```go
+package example
+
+func exampleAsyncProcessing() {
+	// Create a new HandlerCatalog
+	handlerCatalog := commands.NewHandlerCatalog()
+
+	// Register handlers
+	exampleHandlerRegistration()
+
+	// Use Future to handle the command asynchronously
+	future := commands.Future[AddCommandReq, AddCommandRes](context.Background(), handlerCatalog, AddCommandReq{ArgX: 5, ArgY: 3})
+
+	// Wait for the result
+	result := future.Wait()
+	fmt.Printf("async result: %+v\n", result.Val1)
+}
+```
+
+### Registering Mappers
+
+Use the `MappingCatalog` to map request names to their corresponding types.
+
+```go
+package example
+
+import (
+	"fmt"
+	"github.com/dan-lugg/go-commands/commands"
+	"log"
+)
+
+func exampleMappingCatalog() {
+	// Create a new MappingCatalog
+	mappingCatalog := commands.NewMappingCatalog()
+
+	// Insert mappings for command request types
+	commands.InsertMapping[AddCommandReq](mappingCatalog, "add")
+	commands.InsertMapping[SubCommandReq](mappingCatalog, "sub")
+
+	// Retrieve a type by its name
+	reqType, err := mappingCatalog.ByName("add")
+	if err != nil {
+		log.Fatalf("error retrieving type: %v", err)
+	}
+	fmt.Printf("request type: %v\n", reqType)
+}
+
+```
+
+### Registering Decoders
+
+Use the `DecoderCatalog` to register decoders for your command request types. Decoders are responsible for deserializing
+incoming data into specific command request types.
+
+```go
+package example
+
+import "github.com/dan-lugg/go-commands/commands"
+
+func exampleDecoderRegistration() {
+	// Create a new DecoderCatalog
+	decoderCatalog := commands.NewDecoderCatalog()
+
+	// Register decoders for command requests
+	commands.InsertDecoder[AddCommandReq](decoderCatalog, DefaultDecoder[AddCommandReq]())
+	commands.InsertDecoder[SubCommandReq](decoderCatalog, DefaultDecoder[SubCommandReq]())
+}
+
 ```
 
 ## Testing
 
-Run unit tests using:
+Unit tests are provided to ensure the reliability of the framework. Run the tests using:
 
 ```bash
 go test ./...
@@ -118,9 +235,12 @@ go test ./...
 
 ## Project Structure
 
-- `commands/commands.go`: Core framework implementation.
-- `commands/commands_test.go`: Unit tests for the framework.
-- `example/example.go`: Example usage of the framework.
+- `commands/`:
+    - Core framework implementation.
+- `futures/`:
+    - Asynchronous processing utilities.
+- `util/`:
+    - Utility types and functions.
 
 ## Dependencies
 
