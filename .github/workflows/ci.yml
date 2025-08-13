@@ -37,5 +37,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # if you don't want to set write permissions use a PAT token
           DEFAULT_BUMP: patch
+          RELEASE_BRANCHES: master
           TAG_PREFIX: v
         

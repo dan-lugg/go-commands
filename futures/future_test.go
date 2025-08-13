@@ -13,12 +13,21 @@ const (
 	Result3 = "result 3"
 )
 
-func Test_New(t *testing.T) {
+func Test_Start(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		f := Start[string](nil, func(ctx context.Context) string {
 			return Result1
 		})
 		assert.NotNil(t, f)
+	})
+}
+
+func Test_Value(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		f := Value[string](Result1)
+		assert.NotNil(t, f)
+		result := f.Wait()
+		assert.Equal(t, Result1, result)
 	})
 }
 

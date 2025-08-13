@@ -103,14 +103,14 @@ func NewDefaultHandlerAdapter[TReq CommandReq[TRes], TRes CommandRes](factory fu
 func (a *DefaultHandlerAdapter[TReq, TRes]) Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
-	adaptedReq, ok := req.(TReq)
+	typedReq, ok := req.(TReq)
 	if !ok {
-		return nil, fmt.Errorf("request type %T does not match expected type %T", req, a.handler)
+		return nil, fmt.Errorf("request type %T does not match expected type %T", req, typedReq)
 	}
 	if a.handler == nil {
 		a.handler = a.handlerFactory()
 	}
-	return a.handler.Handle(ctx, adaptedReq)
+	return a.handler.Handle(ctx, typedReq)
 }
 
 // ReqType returns the reflect.Type of the request handled by the adapter.
@@ -192,11 +192,11 @@ func (r *HandlerCatalog) Handle(ctx context.Context, req CommandReq[CommandRes])
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	reqType := reflect.TypeOf(req)
-	handler, found := r.adapters[reqType]
+	adapter, found := r.adapters[reqType]
 	if !found {
 		return nil, fmt.Errorf("%w for req type: %s", ErrHandlerMissing, reqType)
 	}
-	return handler.Handle(ctx, req)
+	return adapter.Handle(ctx, req)
 }
 
 // Handle processes a command request using the cataloged handler.
@@ -213,13 +213,16 @@ func (r *HandlerCatalog) Handle(ctx context.Context, req CommandReq[CommandRes])
 // Returns:
 //   - res: A TRes representing the result of the command processing.
 //   - err: An error if the request type does not match the expected type or if the handler fails.
-func Handle[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *HandlerCatalog, req TReq) (res TRes, err error) {
-	wrappedRes, err := catalog.Handle(ctx, req)
-	var ok bool
-	if res, ok = wrappedRes.(TRes); !ok {
-		return *new(TRes), fmt.Errorf("%w %T was unexpected for %T", ErrInvalidResType, wrappedRes, res)
+func Handle[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *HandlerCatalog, req TReq) (typedRes TRes, err error) {
+	res, err := catalog.Handle(ctx, req)
+	if errors.Is(err, ErrHandlerMissing) {
+		return *new(TRes), err
 	}
-	return res, err
+	var ok bool
+	if typedRes, ok = res.(TRes); !ok {
+		return *new(TRes), fmt.Errorf("%w %T was unexpected for %T", ErrInvalidResType, res, typedRes)
+	}
+	return typedRes, err
 }
 
 // Future creates a futures.Future that asynchronously processes a command request.
@@ -259,30 +262,25 @@ func (r *HandlerCatalog) Future(ctx context.Context, req CommandReq[CommandRes])
 //   - Val2 is an error if the processing fails.
 func Future[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *HandlerCatalog, req TReq) futures.Future[util.Tuple2[TRes, error]] {
 	fut := catalog.Future(ctx, req)
-	if fut == nil {
-		return futures.Value(util.Tuple2[TRes, error]{
-			Val1: *new(TRes),
-			Val2: fmt.Errorf("no future created for request type %T", req),
-		})
-	}
 	return futures.Start(ctx, func(ctx context.Context) util.Tuple2[TRes, error] {
 		tup := fut.Wait()
-		if tup.Val2 != nil {
+		res, err := tup.Val1, tup.Val2
+		if err != nil {
 			return util.Tuple2[TRes, error]{
 				Val1: *new(TRes),
-				Val2: tup.Val2,
+				Val2: err,
 			}
 		}
-		res, ok := tup.Val1.(TRes)
+		typedRes, ok := res.(TRes)
 		if !ok {
 			return util.Tuple2[TRes, error]{
 				Val1: *new(TRes),
-				Val2: fmt.Errorf("%w %T was unexpected for %T", ErrInvalidResType, tup.Val1, res),
+				Val2: fmt.Errorf("%w %T was unexpected for %T", ErrInvalidResType, res, typedRes),
 			}
 		}
 		return util.Tuple2[TRes, error]{
-			Val1: res,
-			Val2: tup.Val2,
+			Val1: typedRes,
+			Val2: err,
 		}
 	})
 }
@@ -296,10 +294,6 @@ func Future[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog
 // Parameters:
 //   - catalog: A pointer to the HandlerCatalog where the handler will be cataloged.
 //   - factory: A HandlerFactory function that creates a new instance of a Handler for the specified request and response types.
-//
-// Behavior:
-//   - Creates a new DefaultHandlerAdapter using the provided factory function.
-//   - Inserts the adapter in the given HandlerCatalog.
 func InsertHandler[TReq CommandReq[TRes], TRes CommandRes](catalog *HandlerCatalog, factory HandlerFactory[TReq, TRes]) {
 	catalog.Insert(NewDefaultHandlerAdapter(factory))
 }

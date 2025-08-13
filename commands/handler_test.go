@@ -102,16 +102,15 @@ func Test_HandlerCatalog_Handle(t *testing.T) {
 	})
 
 	t.Run("default", func(t *testing.T) {
-		res, err := catalog.Handle(nil, AddCommandReq{ArgX: 3, ArgY: 4})
+		res, err := Handle[AddCommandReq, AddCommandRes](nil, catalog, AddCommandReq{ArgX: 3, ArgY: 4})
 		assert.NoError(t, err)
 		assert.Equal(t, AddCommandRes{Result: 7}, res)
 	})
 
 	t.Run("handler missing", func(t *testing.T) {
-		res, err := catalog.Handle(nil, SubCommandReq{ArgX: 3, ArgY: 4})
-		assert.Error(t, err)
+		res, err := Handle[SubCommandReq, SubCommandRes](nil, catalog, SubCommandReq{ArgX: 3, ArgY: 4})
+		assert.Zero(t, res)
 		assert.ErrorIs(t, err, ErrHandlerMissing)
-		assert.Nil(t, res)
 	})
 }
 
