@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"github.com/dan-lugg/go-commands/util"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -45,16 +44,16 @@ func Test_MappingCatalog_ByName(t *testing.T) {
 	catalog := NewMappingCatalog()
 	InsertMapping[AddCommandReq](catalog, AddReqName)
 
-	t.Run("valid input", func(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
 		reqType, err := catalog.ByName(AddReqName)
 		assert.NoError(t, err)
 		assert.Equal(t, reflect.TypeFor[AddCommandReq](), reqType)
 	})
 
-	t.Run("mapping not cataloged", func(t *testing.T) {
+	t.Run("mapping missing", func(t *testing.T) {
 		reqType, err := catalog.ByName(SubReqName)
 		assert.Error(t, err)
-		assert.ErrorIs(t, err, util.ErrNotCataloged)
+		assert.ErrorIs(t, err, ErrMappingMissing)
 		assert.Nil(t, reqType)
 	})
 }
@@ -63,16 +62,16 @@ func Test_MappingCatalog_ByType(t *testing.T) {
 	catalog := NewMappingCatalog()
 	InsertMapping[AddCommandReq](catalog, AddReqName)
 
-	t.Run("valid input", func(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
 		reqType, err := catalog.ByType(reflect.TypeFor[AddCommandReq]())
 		assert.NoError(t, err)
 		assert.Equal(t, AddReqName, reqType)
 	})
 
-	t.Run("mapping not cataloged", func(t *testing.T) {
+	t.Run("mapping missing", func(t *testing.T) {
 		reqType, err := catalog.ByType(reflect.TypeFor[SubCommandReq]())
 		assert.Error(t, err)
-		assert.ErrorIs(t, err, util.ErrNotCataloged)
+		assert.ErrorIs(t, err, ErrMappingMissing)
 		assert.Empty(t, reqType)
 	})
 }

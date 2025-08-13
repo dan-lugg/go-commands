@@ -20,7 +20,7 @@ type AddHandler struct {
 	Handler[AddCommandReq, AddCommandRes]
 }
 
-func (h *AddHandler) Handle(req AddCommandReq, ctx context.Context) (res AddCommandRes, err error) {
+func (h *AddHandler) Handle(ctx context.Context, req AddCommandReq) (res AddCommandRes, err error) {
 	result := req.ArgX + req.ArgY
 	return AddCommandRes{Result: result}, nil
 }
@@ -38,7 +38,7 @@ type SubHandler struct {
 	Handler[SubCommandReq, SubCommandRes]
 }
 
-func (h *SubHandler) Handle(req SubCommandReq, ctx context.Context) (res SubCommandRes, err error) {
+func (h *SubHandler) Handle(ctx context.Context, req SubCommandReq) (res SubCommandRes, err error) {
 	result := req.ArgX - req.ArgY
 	return SubCommandRes{Result: result}, nil
 }

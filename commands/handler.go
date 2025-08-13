@@ -2,10 +2,18 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/dan-lugg/go-commands/futures"
 	"github.com/dan-lugg/go-commands/util"
 	"reflect"
 	"sync"
+)
+
+var (
+	ErrHandlerMissing = errors.New("handler missing")
+	ErrInvalidReqType = errors.New("invalid req type")
+	ErrInvalidResType = errors.New("invalid res type")
 )
 
 // Handler is a generic interface for handling commands.
@@ -15,11 +23,11 @@ import (
 //   - TRes: The type of the command response, which must implement the CommandRes interface.
 //
 // Methods:
-//   - HandleRaw(req TReq, ctx context.Context) (res TRes, err error):
+//   - Handle(req TReq, ctx context.Context) (res TRes, err error):
 //     Processes the given command request (req) within the provided context (ctx).
 //     Returns the command response (res) and an error (err) if the handling fails.
 type Handler[TReq CommandReq[TRes], TRes CommandRes] interface {
-	Handle(req TReq, ctx context.Context) (res TRes, err error)
+	Handle(ctx context.Context, req TReq) (res TRes, err error)
 }
 
 // HandlerFactory is a type alias for a function that creates a new instance of a Handler.
@@ -37,12 +45,12 @@ type HandlerFactory[TReq CommandReq[TRes], TRes CommandRes] func() Handler[TReq,
 // Methods:
 //   - ReqType(): Returns the reflect.Type of the request handled by the adapter.
 //   - ResType(): Returns the reflect.Type of the response produced by the adapter.
-//   - HandleRaw(req CommandReq[CommandRes], ctx context.Context): Processes the given request (req) within the provided context (ctx),
+//   - Handle(req CommandReq[CommandRes], ctx context.Context): Processes the given request (req) within the provided context (ctx),
 //     returning the response (res) or an error (err) if the handling fails.
 type HandlerAdapter interface {
 	ReqType() reflect.Type
 	ResType() reflect.Type
-	Handle(req CommandReq[CommandRes], ctx context.Context) (res CommandRes, err error)
+	Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error)
 }
 
 // DefaultHandlerAdapter is a generic adapter for handling commands.
@@ -79,26 +87,20 @@ func NewDefaultHandlerAdapter[TReq CommandReq[TRes], TRes CommandRes](factory fu
 	}
 }
 
-// HandleRaw processes the given request (req) within the provided context (ctx).
+// Handle processes the given request (req) within the provided context (ctx).
 //
 // Type Parameters:
 //   - TReq: The type of the command request, which must implement the CommandReq interface.
 //   - TRes: The type of the command response, which must implement the CommandRes interface.
 //
 // Parameters:
-//   - req: A CommandReq[CommandRes] representing the command request to be processed.
 //   - ctx: A context.Context providing context for the request processing.
+//   - req: A CommandReq[CommandRes] representing the command request to be processed.
 //
 // Returns:
 //   - res: A CommandRes representing the result of the command processing.
 //   - err: An error if the request type does not match the expected type or if the handler fails.
-//
-// Behavior:
-//   - Attempts to cast the req to the expected type TReq.
-//   - If the cast fails, returns an error indicating the type mismatch.
-//   - Lazily initializes the handler using the handlerFactory if it is not already initialized.
-//   - Delegates the request processing to the handler and returns the result or an error.
-func (a *DefaultHandlerAdapter[TReq, TRes]) Handle(req CommandReq[CommandRes], ctx context.Context) (res CommandRes, err error) {
+func (a *DefaultHandlerAdapter[TReq, TRes]) Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	adaptedReq, ok := req.(TReq)
@@ -108,7 +110,7 @@ func (a *DefaultHandlerAdapter[TReq, TRes]) Handle(req CommandReq[CommandRes], c
 	if a.handler == nil {
 		a.handler = a.handlerFactory()
 	}
-	return a.handler.Handle(adaptedReq, ctx)
+	return a.handler.Handle(ctx, adaptedReq)
 }
 
 // ReqType returns the reflect.Type of the request handled by the adapter.
@@ -168,11 +170,6 @@ func NewHandlerCatalog(options ...NewHandlerCatalogOption) *HandlerCatalog {
 //
 // Parameters:
 //   - adapter: The HandlerAdapter instance to catalog.
-//
-// Behavior:
-//   - Associates the request type (ReqType) of the adapter with the adapter itself
-//     in the adapters map of the catalog.
-//   - Enables the catalog to handle requests of the cataloged type using the adapter.
 func (r *HandlerCatalog) Insert(adapter HandlerAdapter) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -182,7 +179,7 @@ func (r *HandlerCatalog) Insert(adapter HandlerAdapter) {
 	r.adapters[adapter.ReqType()] = adapter
 }
 
-// HandleRaw processes a command request using the cataloged handler.
+// Handle processes a command request using the cataloged handler.
 //
 // Parameters:
 //   - req: A CommandReq[CommandRes] representing the command request to be processed.
@@ -191,21 +188,103 @@ func (r *HandlerCatalog) Insert(adapter HandlerAdapter) {
 // Returns:
 //   - res: A CommandRes representing the result of the command processing.
 //   - err: An error if no handler is cataloged for the request type or if the handler fails.
-//
-// Behavior:
-//   - Determines the type of the request (reqType) using reflection.
-//   - Looks up the handler associated with the reqType in the catalog's adapters map.
-//   - If no handler is found, returns an error indicating the request type is not cataloged.
-//   - Delegates the request processing to the found handler and returns the result or an error.
-func (r *HandlerCatalog) Handle(req CommandReq[CommandRes], ctx context.Context) (res CommandRes, err error) {
+func (r *HandlerCatalog) Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	reqType := reflect.TypeOf(req)
 	handler, found := r.adapters[reqType]
 	if !found {
-		return nil, fmt.Errorf("no handler for reqType: %s, %w", reqType, util.ErrNotCataloged)
+		return nil, fmt.Errorf("%w for req type: %s", ErrHandlerMissing, reqType)
 	}
-	return handler.Handle(req, ctx)
+	return handler.Handle(ctx, req)
+}
+
+// Handle processes a command request using the cataloged handler.
+//
+// Type Parameters:
+//   - TReq: The type of the command request, which must implement the CommandReq interface.
+//   - TRes: The type of the command response, which must implement the CommandRes interface.
+//
+// Parameters:
+//   - ctx: A context.Context providing context for the request processing.
+//   - catalog: A pointer to the HandlerCatalog containing the cataloged handlers.
+//   - req: A TReq representing the command request to be processed.
+//
+// Returns:
+//   - res: A TRes representing the result of the command processing.
+//   - err: An error if the request type does not match the expected type or if the handler fails.
+func Handle[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *HandlerCatalog, req TReq) (res TRes, err error) {
+	wrappedRes, err := catalog.Handle(ctx, req)
+	var ok bool
+	if res, ok = wrappedRes.(TRes); !ok {
+		return *new(TRes), fmt.Errorf("%w %T was unexpected for %T", ErrInvalidResType, wrappedRes, res)
+	}
+	return res, err
+}
+
+// Future creates a futures.Future that asynchronously processes a command request.
+//
+// Parameters:
+//   - ctx: A context.Context providing context for the request processing.
+//   - req: A CommandReq[CommandRes] representing the command request to be processed.
+//
+// Returns:
+//   - A futures.Future containing a util.Tuple2 where:
+//   - Val1 is the CommandRes representing the result of the command processing.
+//   - Val2 is an error if the processing fails.
+func (r *HandlerCatalog) Future(ctx context.Context, req CommandReq[CommandRes]) futures.Future[util.Tuple2[CommandRes, error]] {
+	return futures.Start(ctx, func(ctx context.Context) util.Tuple2[CommandRes, error] {
+		res, err := r.Handle(ctx, req)
+		return util.Tuple2[CommandRes, error]{
+			Val1: res,
+			Val2: err,
+		}
+	})
+}
+
+// Future creates a futures.Future that asynchronously processes a command request.
+//
+// Type Parameters:
+//   - TReq: The type of the command request, which must implement the CommandReq interface.
+//   - TRes: The type of the command response, which must implement the CommandRes interface.
+//
+// Parameters:
+//   - ctx: A context.Context providing context for the request processing.
+//   - catalog: A pointer to the HandlerCatalog containing the cataloged handlers.
+//   - req: A TReq representing the command request to be processed.
+//
+// Returns:
+//   - A futures.Future containing a util.Tuple2 where:
+//   - Val1 is the TRes representing the result of the command processing.
+//   - Val2 is an error if the processing fails.
+func Future[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *HandlerCatalog, req TReq) futures.Future[util.Tuple2[TRes, error]] {
+	fut := catalog.Future(ctx, req)
+	if fut == nil {
+		return futures.Value(util.Tuple2[TRes, error]{
+			Val1: *new(TRes),
+			Val2: fmt.Errorf("no future created for request type %T", req),
+		})
+	}
+	return futures.Start(ctx, func(ctx context.Context) util.Tuple2[TRes, error] {
+		tup := fut.Wait()
+		if tup.Val2 != nil {
+			return util.Tuple2[TRes, error]{
+				Val1: *new(TRes),
+				Val2: tup.Val2,
+			}
+		}
+		res, ok := tup.Val1.(TRes)
+		if !ok {
+			return util.Tuple2[TRes, error]{
+				Val1: *new(TRes),
+				Val2: fmt.Errorf("%w %T was unexpected for %T", ErrInvalidResType, tup.Val1, res),
+			}
+		}
+		return util.Tuple2[TRes, error]{
+			Val1: res,
+			Val2: tup.Val2,
+		}
+	})
 }
 
 // InsertHandler is a generic function that catalogs a handler for a specific command request type.

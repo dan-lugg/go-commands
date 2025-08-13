@@ -1,8 +1,6 @@
 package commands
 
 import (
-	"context"
-	"github.com/dan-lugg/go-commands/util"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -22,13 +20,13 @@ func Test_DefaultHandlerAdapter_Handle(t *testing.T) {
 	})
 
 	t.Run("valid req", func(t *testing.T) {
-		res, err := adapter.Handle(AddCommandReq{ArgX: 3, ArgY: 4}, context.Background())
+		res, err := adapter.Handle(nil, AddCommandReq{ArgX: 3, ArgY: 4})
 		assert.NoError(t, err)
 		assert.Equal(t, AddCommandRes{Result: 7}, res)
 	})
 
 	t.Run("invalid req", func(t *testing.T) {
-		res, err := adapter.Handle(SubCommandReq{}, context.Background())
+		res, err := adapter.Handle(nil, SubCommandReq{})
 		assert.Error(t, err)
 		assert.Nil(t, res)
 	})
@@ -103,17 +101,41 @@ func Test_HandlerCatalog_Handle(t *testing.T) {
 		return &AddHandler{}
 	})
 
-	t.Run("req type handler cataloged", func(t *testing.T) {
-		res, err := catalog.Handle(AddCommandReq{ArgX: 3, ArgY: 4}, context.Background())
+	t.Run("default", func(t *testing.T) {
+		res, err := catalog.Handle(nil, AddCommandReq{ArgX: 3, ArgY: 4})
 		assert.NoError(t, err)
 		assert.Equal(t, AddCommandRes{Result: 7}, res)
 	})
 
-	t.Run("req type handler not cataloged", func(t *testing.T) {
-		res, err := catalog.Handle(SubCommandReq{ArgX: 3, ArgY: 4}, context.Background())
+	t.Run("handler missing", func(t *testing.T) {
+		res, err := catalog.Handle(nil, SubCommandReq{ArgX: 3, ArgY: 4})
 		assert.Error(t, err)
-		assert.ErrorIs(t, err, util.ErrNotCataloged)
+		assert.ErrorIs(t, err, ErrHandlerMissing)
 		assert.Nil(t, res)
+	})
+}
+
+func Test_HandlerCatalog_Future(t *testing.T) {
+	catalog := NewHandlerCatalog()
+	InsertHandler[AddCommandReq, AddCommandRes](catalog, func() Handler[AddCommandReq, AddCommandRes] {
+		return &AddHandler{}
+	})
+
+	t.Run("default", func(t *testing.T) {
+		fut := Future[AddCommandReq, AddCommandRes](nil, catalog, AddCommandReq{ArgX: 3, ArgY: 4})
+		tup := fut.Wait()
+		res, err := tup.Val1, tup.Val2
+
+		assert.Equal(t, AddCommandRes{Result: 7}, res)
+		assert.NoError(t, err)
+	})
+
+	t.Run("handler missing", func(t *testing.T) {
+		fut := Future[SubCommandReq, SubCommandRes](nil, catalog, SubCommandReq{ArgX: 3, ArgY: 4})
+		tup := fut.Wait()
+		res, err := tup.Val1, tup.Val2
+		assert.Zero(t, res)
+		assert.ErrorIs(t, err, ErrHandlerMissing)
 	})
 }
 

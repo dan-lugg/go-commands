@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"github.com/dan-lugg/go-commands/util"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -70,10 +69,10 @@ func Test_DecoderCatalog_Decode(t *testing.T) {
 		assert.Nil(t, req)
 	})
 
-	t.Run("decoder not cataloged", func(t *testing.T) {
+	t.Run("decoder missing", func(t *testing.T) {
 		req, err := catalog.Decode(reflect.TypeFor[SubCommandReq](), []byte(`#!`))
 		assert.Error(t, err)
-		assert.ErrorIs(t, err, util.ErrNotCataloged)
+		assert.ErrorIs(t, err, ErrDecoderMissing)
 		assert.Nil(t, req)
 	})
 }

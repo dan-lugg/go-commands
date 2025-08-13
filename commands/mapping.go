@@ -1,10 +1,15 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"github.com/dan-lugg/go-commands/util"
 	"reflect"
 	"sync"
+)
+
+var (
+	ErrMappingMissing = errors.New("mapping missing")
 )
 
 // MappingCatalog is a catalog for managing mappings between request names and types.
@@ -47,12 +52,6 @@ func NewMappingCatalog(options ...NewMappingCatalogOption) (catalog *MappingCata
 // Parameters:
 //   - reqName: A string representing the name of the request.
 //   - reqType: A reflect.Type representing the type of the request.
-//
-// Behavior:
-//   - Ensures thread-safe access to the catalog using a mutex.
-//   - Initializes the nameMappings and typeMappings maps if they are nil.
-//   - Associates the reqName with the reqType in the nameMappings map.
-//   - Associates the reqType with the reqName in the typeMappings map.
 func (m *MappingCatalog) Insert(reqName string, reqType reflect.Type) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -74,18 +73,12 @@ func (m *MappingCatalog) Insert(reqName string, reqType reflect.Type) {
 // Returns:
 //   - reqType: The reflect.Type associated with the given request name.
 //   - err: An error if no mapping is cataloged for the given request name.
-//
-// Behavior:
-//   - Acquires a read lock to ensure thread-safe access to the nameMappings map.
-//   - Checks if the reqName exists in the nameMappings map.
-//   - If the reqName is not found, returns an error indicating the mapping is not cataloged.
-//   - If the reqName is found, returns the associated reflect.Type.
 func (m *MappingCatalog) ByName(reqName string) (reqType reflect.Type, err error) {
 	var ok bool
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 	if reqType, ok = m.nameMappings[reqName]; !ok {
-		return nil, fmt.Errorf("no mapping for reqName: %s, %w", reqName, util.ErrNotCataloged)
+		return nil, fmt.Errorf("%w for req name: %s", ErrMappingMissing, reqName)
 	}
 	return reqType, nil
 }
@@ -98,18 +91,12 @@ func (m *MappingCatalog) ByName(reqName string) (reqType reflect.Type, err error
 // Returns:
 //   - reqName: A string representing the name of the request associated with the given type.
 //   - err: An error if no mapping is cataloged for the given request type.
-//
-// Behavior:
-//   - Acquires a read lock to ensure thread-safe access to the typeMappings map.
-//   - Checks if the reqType exists in the typeMappings map.
-//   - If the reqType is not found, returns an error indicating the mapping is not cataloged.
-//   - If the reqType is found, returns the associated request name.
 func (m *MappingCatalog) ByType(reqType reflect.Type) (reqName string, err error) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 	var ok bool
 	if reqName, ok = m.typeMappings[reqType]; !ok {
-		return "", fmt.Errorf("no mapping for reqType: %s, %w", reqType, util.ErrNotCataloged)
+		return "", fmt.Errorf("%w for req type: %s", ErrMappingMissing, reqType)
 	}
 	return reqName, nil
 }
@@ -122,9 +109,6 @@ func (m *MappingCatalog) ByType(reqType reflect.Type) (reqName string, err error
 // Parameters:
 //   - catalog: A pointer to the MappingCatalog where the mapping will be cataloged.
 //   - reqName: A string representing the name of the request.
-//
-// Behavior:
-//   - Associates the reqName with the reflect.Type of the generic type TReq in the catalog.
 func InsertMapping[TReq CommandReq[CommandRes]](catalog *MappingCatalog, reqName string) {
 	catalog.Insert(reqName, reflect.TypeFor[TReq]())
 }
