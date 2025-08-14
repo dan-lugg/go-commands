@@ -25,7 +25,6 @@ jobs:
         with:
           config: ./.testcoverage.yml
   version:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     needs: cover
     permissions: write-all
