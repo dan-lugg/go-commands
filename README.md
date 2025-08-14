@@ -134,7 +134,8 @@ func exampleRequestHandling() {
 	handlerCatalog := commands.NewHandlerCatalog()
 
 	// Register handlers
-	exampleHandlerRegistration()
+	// commands.InsertHandler(...)
+	// commands.InsertHandler(...)
 
 	// Create a command request
 	req := AddCommandReq{ArgX: 5, ArgY: 3}
@@ -145,7 +146,7 @@ func exampleRequestHandling() {
 		log.Fatalf("error handling request: %v", err)
 	}
 
-	fmt.Printf("result: %+v\n", res)
+	fmt.Printf("result: %+v\n", res) // result: {Result:8}
 }
 
 ```
@@ -157,20 +158,41 @@ The `Future` function allows you to process commands asynchronously.
 ```go
 package example
 
+import (
+	"context"
+	"fmt"
+	"github.com/dan-lugg/go-commands/commands"
+	"log"
+)
+
 func exampleAsyncProcessing() {
 	// Create a new HandlerCatalog
 	handlerCatalog := commands.NewHandlerCatalog()
 
 	// Register handlers
-	exampleHandlerRegistration()
+	// commands.InsertHandler(...)
+	// commands.InsertHandler(...)
 
-	// Use Future to handle the command asynchronously
-	future := commands.Future[AddCommandReq, AddCommandRes](context.Background(), handlerCatalog, AddCommandReq{ArgX: 5, ArgY: 3})
+	// Create a command request
+	req := AddCommandReq{ArgX: 5, ArgY: 3}
 
-	// Wait for the result
-	result := future.Wait()
-	fmt.Printf("async result: %+v\n", result.Val1)
+	// Handle the request asynchronously into a Future
+	fut := commands.Future[AddCommandReq, AddCommandRes](context.Background(), handlerCatalog, req)
+
+	// Do other work while the command is being processed asynchronously
+	// DoSomeStuff(...)
+	// DoMoreStuff(...)
+
+	// Wait for the result returned as a Tuple and unpack it
+	tup := fut.Wait()
+	res, err := tup.Val1, tup.Val2
+	if err != nil {
+		log.Fatalf("error handling request: %v", err)
+	}
+
+	fmt.Printf("result: %+v\n", res) // result: {Result:8}
 }
+
 ```
 
 ### Registering Mappers
