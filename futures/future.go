@@ -57,11 +57,24 @@ func WaitAll[R any](futures ...Future[R]) Future[[]R] {
 	})
 }
 
+func WaitAllMap[K comparable, R any](m map[K]Future[R]) Future[map[K]R] {
+	return Start(context.Background(), func(ctx context.Context) map[K]R {
+		r := make(map[K]R, len(m))
+		for k, f := range m {
+			r[k] = f.Wait()
+		}
+		return r
+	})
+}
+
 // RaceAll takes multiple Future instances and returns a new Future
 // that resolves to the result of the first Future to complete.
 // The remaining Future computations are not canceled and will continue
 // to execute in the background.
 func RaceAll[R any](futures ...Future[R]) Future[R] {
+	if len(futures) == 0 {
+		return Value(*new(R))
+	}
 	return Start(context.Background(), func(ctx context.Context) R {
 		ch := make(chan R, len(futures))
 		for i := 0; i < len(futures); i++ {

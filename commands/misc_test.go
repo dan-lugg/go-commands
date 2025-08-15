@@ -1,6 +1,9 @@
 package commands
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 const (
 	AddReqName = "add"
@@ -41,4 +44,32 @@ type SubHandler struct {
 func (h *SubHandler) Handle(ctx context.Context, req SubCommandReq) (res SubCommandRes, err error) {
 	result := req.ArgX - req.ArgY
 	return SubCommandRes{Result: result}, nil
+}
+
+type SlowCommandRes struct {
+	CommandRes
+	Name string
+}
+
+type SlowCommandReq struct {
+	CommandReq[SlowCommandRes]
+	Name string
+	Fail bool
+	Iter int
+}
+
+type SlowHandler struct {
+	Handler[SlowCommandReq, SlowCommandRes]
+}
+
+func (h *SlowHandler) Handle(ctx context.Context, req SlowCommandReq) (res SlowCommandRes, err error) {
+	for i := 1; i <= req.Iter; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if ctx.Err() != nil {
+			return SlowCommandRes{}, ctx.Err()
+		}
+	}
+	return SlowCommandRes{
+		Name: req.Name,
+	}, nil
 }
