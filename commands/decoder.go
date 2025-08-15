@@ -103,8 +103,8 @@ func InsertDecoder[TReq CommandReq[CommandRes]](catalog *DecoderCatalog, decoder
 //   - An error if the decoding fails or if no decoder is cataloged for the given request name.
 func (d *DecoderCatalog) Decode(reqType reflect.Type, reqJSON []byte) (req CommandReq[CommandRes], err error) {
 	d.mutex.RLock()
-	defer d.mutex.RUnlock()
 	decoder, found := d.decoders[reqType]
+	d.mutex.RUnlock()
 	if !found {
 		return nil, fmt.Errorf("%w: req type: %s", ErrDecoderMissing, reqType)
 	}
