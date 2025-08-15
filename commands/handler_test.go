@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"github.com/dan-lugg/go-commands/futures"
 	"github.com/dan-lugg/go-commands/util"
 	"github.com/stretchr/testify/assert"
@@ -119,30 +118,6 @@ func Test_HandlerCatalog_Handle(t *testing.T) {
 	})
 }
 
-type SlowCommandRes struct {
-	CommandRes
-	Name string
-}
-type SlowCommandReq struct {
-	CommandReq[SlowCommandRes]
-	Name string
-	Iter int
-}
-
-type SlowHandler struct {
-	Handler[SlowCommandReq, SlowCommandRes]
-}
-
-func (h *SlowHandler) Handle(ctx context.Context, req SlowCommandReq) (res SlowCommandRes, err error) {
-	for i := 1; i <= req.Iter; i++ {
-		println("Processing in SlowHandler:", i, "for command:", req.Name)
-		time.Sleep(1 * time.Second)
-	}
-	return SlowCommandRes{
-		Name: req.Name,
-	}, nil
-}
-
 func Test_HandlerCatalog_Future(t *testing.T) {
 	catalog := NewHandlerCatalog()
 	InsertHandler[AddCommandReq, AddCommandRes](catalog, func() Handler[AddCommandReq, AddCommandRes] {
@@ -169,39 +144,73 @@ func Test_HandlerCatalog_Future(t *testing.T) {
 		assert.ErrorIs(t, err, ErrHandlerMissing)
 	})
 
-	t.Run("multiple", func(t *testing.T) {
+	t.Run("wait all", func(t *testing.T) {
 		start := time.Now()
+		ctx, cancel := context.WithCancel(context.Background())
 
-		fut1 := Future[SlowCommandReq, SlowCommandRes](nil, catalog, SlowCommandReq{
+		fut1 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
 			Name: "A",
-			Iter: 1,
-		})
-		fut2 := Future[SlowCommandReq, SlowCommandRes](nil, catalog, SlowCommandReq{
-			Name: "B",
 			Iter: 3,
 		})
-		fut3 := Future[SlowCommandReq, SlowCommandRes](nil, catalog, SlowCommandReq{
+		fut2 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+			Name: "B",
+			Iter: 1,
+		})
+		fut3 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
 			Name: "C",
 			Iter: 4,
 		})
-		fut4 := Future[SlowCommandReq, SlowCommandRes](nil, catalog, SlowCommandReq{
+		fut4 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
 			Name: "D",
 			Iter: 2,
 		})
 
 		tups := futures.WaitAll[util.Tuple2[SlowCommandRes, error]](fut1, fut2, fut3, fut4).Wait()
+		cancel()
 
 		duration := time.Since(start)
 
-		assert.Less(t, duration, 5*time.Second)
-		assert.Greater(t, duration, 3*time.Second)
+		assert.Less(t, duration, 500*time.Millisecond)
+		assert.Greater(t, duration, 300*time.Millisecond)
 
 		for _, tup := range tups {
 			res, err := tup.Val1, tup.Val2
 			assert.NoError(t, err)
 			assert.IsType(t, SlowCommandRes{}, res)
-			println(fmt.Sprintf("Processed command: %s", res.Name))
 		}
+	})
+
+	t.Run("race all", func(t *testing.T) {
+		start := time.Now()
+		ctx, cancel := context.WithCancel(context.Background())
+
+		fut1 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+			Name: "A",
+			Iter: 3,
+		})
+		fut2 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+			Name: "B",
+			Iter: 1,
+		})
+		fut3 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+			Name: "C",
+			Iter: 4,
+		})
+		fut4 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+			Name: "D",
+			Iter: 2,
+		})
+
+		tup := futures.RaceAll[util.Tuple2[SlowCommandRes, error]](fut1, fut2, fut3, fut4).Wait()
+		cancel()
+		res, err := tup.Val1, tup.Val2
+
+		duration := time.Since(start)
+
+		assert.Less(t, duration, 200*time.Millisecond)
+		assert.Greater(t, duration, 100*time.Millisecond)
+		assert.NoError(t, err)
+		assert.Equal(t, "B", res.Name)
 	})
 }
 

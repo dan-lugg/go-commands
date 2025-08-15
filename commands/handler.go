@@ -101,22 +101,25 @@ func NewDefaultHandlerAdapter[TReq CommandReq[TRes], TRes CommandRes](factory fu
 //   - res: A CommandRes representing the result of the command processing.
 //   - err: An error if the request type does not match the expected type or if the handler fails.
 func (a *DefaultHandlerAdapter[TReq, TRes]) Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error) {
-	// a.mutex.RLock()
-	// defer a.mutex.RUnlock()
 	typedReq, ok := req.(TReq)
 	if !ok {
-		return nil, fmt.Errorf("request type %T does not match expected type %T", req, typedReq)
+		return nil, fmt.Errorf("req type %T does not match %T", req, typedReq)
 	}
 	a.mutex.RLock()
 	handler := a.handler
 	a.mutex.RUnlock()
 	if handler == nil {
-		a.mutex.Lock()
-		if a.handler == nil {
-			a.handler = a.handlerFactory()
-		}
-		a.mutex.Unlock()
+		func() {
+			a.mutex.Lock()
+			defer a.mutex.Unlock()
+			if a.handler == nil {
+				a.handler = a.handlerFactory()
+			}
+		}()
 		handler = a.handler
+	}
+	if handler == nil {
+		return nil, fmt.Errorf("%w for req type: %s", ErrHandlerMissing, a.ReqType())
 	}
 	return handler.Handle(ctx, typedReq)
 }
