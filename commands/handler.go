@@ -101,16 +101,24 @@ func NewDefaultHandlerAdapter[TReq CommandReq[TRes], TRes CommandRes](factory fu
 //   - res: A CommandRes representing the result of the command processing.
 //   - err: An error if the request type does not match the expected type or if the handler fails.
 func (a *DefaultHandlerAdapter[TReq, TRes]) Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error) {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
+	// a.mutex.RLock()
+	// defer a.mutex.RUnlock()
 	typedReq, ok := req.(TReq)
 	if !ok {
 		return nil, fmt.Errorf("request type %T does not match expected type %T", req, typedReq)
 	}
-	if a.handler == nil {
-		a.handler = a.handlerFactory()
+	a.mutex.RLock()
+	handler := a.handler
+	a.mutex.RUnlock()
+	if handler == nil {
+		a.mutex.Lock()
+		if a.handler == nil {
+			a.handler = a.handlerFactory()
+		}
+		a.mutex.Unlock()
+		handler = a.handler
 	}
-	return a.handler.Handle(ctx, typedReq)
+	return handler.Handle(ctx, typedReq)
 }
 
 // ReqType returns the reflect.Type of the request handled by the adapter.
@@ -261,9 +269,8 @@ func (r *HandlerCatalog) Future(ctx context.Context, req CommandReq[CommandRes])
 //   - Val1 is the TRes representing the result of the command processing.
 //   - Val2 is an error if the processing fails.
 func Future[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *HandlerCatalog, req TReq) futures.Future[util.Tuple2[TRes, error]] {
-	fut := catalog.Future(ctx, req)
 	return futures.Start(ctx, func(ctx context.Context) util.Tuple2[TRes, error] {
-		tup := fut.Wait()
+		tup := catalog.Future(ctx, req).Wait()
 		res, err := tup.Val1, tup.Val2
 		if err != nil {
 			return util.Tuple2[TRes, error]{
