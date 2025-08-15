@@ -1,9 +1,14 @@
 package commands
 
 import (
+	"context"
+	"fmt"
+	"github.com/dan-lugg/go-commands/futures"
+	"github.com/dan-lugg/go-commands/util"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func Test_NewDefaultHandlerAdapter(t *testing.T) {
@@ -114,10 +119,37 @@ func Test_HandlerCatalog_Handle(t *testing.T) {
 	})
 }
 
+type SlowCommandRes struct {
+	CommandRes
+	Name string
+}
+type SlowCommandReq struct {
+	CommandReq[SlowCommandRes]
+	Name string
+	Iter int
+}
+
+type SlowHandler struct {
+	Handler[SlowCommandReq, SlowCommandRes]
+}
+
+func (h *SlowHandler) Handle(ctx context.Context, req SlowCommandReq) (res SlowCommandRes, err error) {
+	for i := 1; i <= req.Iter; i++ {
+		println("Processing in SlowHandler:", i, "for command:", req.Name)
+		time.Sleep(1 * time.Second)
+	}
+	return SlowCommandRes{
+		Name: req.Name,
+	}, nil
+}
+
 func Test_HandlerCatalog_Future(t *testing.T) {
 	catalog := NewHandlerCatalog()
 	InsertHandler[AddCommandReq, AddCommandRes](catalog, func() Handler[AddCommandReq, AddCommandRes] {
 		return &AddHandler{}
+	})
+	InsertHandler[SlowCommandReq, SlowCommandRes](catalog, func() Handler[SlowCommandReq, SlowCommandRes] {
+		return &SlowHandler{}
 	})
 
 	t.Run("default", func(t *testing.T) {
@@ -135,6 +167,41 @@ func Test_HandlerCatalog_Future(t *testing.T) {
 		res, err := tup.Val1, tup.Val2
 		assert.Zero(t, res)
 		assert.ErrorIs(t, err, ErrHandlerMissing)
+	})
+
+	t.Run("multiple", func(t *testing.T) {
+		start := time.Now()
+
+		fut1 := Future[SlowCommandReq, SlowCommandRes](nil, catalog, SlowCommandReq{
+			Name: "A",
+			Iter: 1,
+		})
+		fut2 := Future[SlowCommandReq, SlowCommandRes](nil, catalog, SlowCommandReq{
+			Name: "B",
+			Iter: 3,
+		})
+		fut3 := Future[SlowCommandReq, SlowCommandRes](nil, catalog, SlowCommandReq{
+			Name: "C",
+			Iter: 4,
+		})
+		fut4 := Future[SlowCommandReq, SlowCommandRes](nil, catalog, SlowCommandReq{
+			Name: "D",
+			Iter: 2,
+		})
+
+		tups := futures.WaitAll[util.Tuple2[SlowCommandRes, error]](fut1, fut2, fut3, fut4).Wait()
+
+		duration := time.Since(start)
+
+		assert.Less(t, duration, 5*time.Second)
+		assert.Greater(t, duration, 3*time.Second)
+
+		for _, tup := range tups {
+			res, err := tup.Val1, tup.Val2
+			assert.NoError(t, err)
+			assert.IsType(t, SlowCommandRes{}, res)
+			println(fmt.Sprintf("Processed command: %s", res.Name))
+		}
 	})
 }
 
