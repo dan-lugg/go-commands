@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dan-lugg/go-commands/util"
 	"reflect"
 	"sync"
+
+	"github.com/dan-lugg/go-commands/util"
 )
 
 var (
@@ -36,6 +37,11 @@ func DefaultDecoder[TReq CommandReq[CommandRes]]() Decoder {
 	}
 }
 
+type DecoderCatalog interface {
+	Insert(reqType reflect.Type, decoder Decoder)
+	Decode(reqType reflect.Type, reqJSON []byte) (CommandReq[CommandRes], error)
+}
+
 // DecoderCatalog is a catalog for managing nameMappings between request names,
 // their corresponding types, and decoders. It allows decoding serialized
 // command request data into specific command request types.
@@ -45,18 +51,18 @@ func DefaultDecoder[TReq CommandReq[CommandRes]]() Decoder {
 //     corresponding reflect.Type.
 //   - decoders: A map that associates reflect.Type with functions that
 //     decode serialized data into CommandReq[CommandRes].
-type DecoderCatalog struct {
+type DefaultDecoderCatalog struct {
 	mutex    sync.RWMutex
 	decoders map[reflect.Type]Decoder
 }
 
-type NewDecoderCatalogOption = util.Option[*DecoderCatalog]
+type NewDefaultDecoderCatalogOption = util.Option[*DefaultDecoderCatalog]
 
-// NewDecoderCatalog creates and returns a new instance of DecoderCatalog.
+// NewDefaultDecoderCatalog creates and returns a new instance of DecoderCatalog.
 // The catalog is initialized with an empty map for decoders, which associates
 // reflect.Type with functions that decode serialized data into CommandReq[CommandRes].
-func NewDecoderCatalog(options ...NewDecoderCatalogOption) (catalog *DecoderCatalog) {
-	catalog = &DecoderCatalog{
+func NewDefaultDecoderCatalog(options ...NewDefaultDecoderCatalogOption) (catalog *DefaultDecoderCatalog) {
+	catalog = &DefaultDecoderCatalog{
 		mutex:    sync.RWMutex{},
 		decoders: make(map[reflect.Type]Decoder),
 	}
@@ -73,7 +79,7 @@ func NewDecoderCatalog(options ...NewDecoderCatalogOption) (catalog *DecoderCata
 //   - reqType: The reflect.Type of the request type.
 //   - decoder: A Decoder function that decodes serialized data
 //     into the specified command request type.
-func (d *DecoderCatalog) Insert(reqType reflect.Type, decoder Decoder) {
+func (d *DefaultDecoderCatalog) Insert(reqType reflect.Type, decoder Decoder) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	if d.decoders == nil {
@@ -88,7 +94,7 @@ func (d *DecoderCatalog) Insert(reqType reflect.Type, decoder Decoder) {
 //   - catalog: A pointer to the DecoderCatalog where the decoder will be cataloged.
 //   - reqName: The name of the request type to catalog.
 //   - decoder: A Decoder function that decodes serialized data into the specified command request type.
-func InsertDecoder[TReq CommandReq[CommandRes]](catalog *DecoderCatalog, decoder Decoder) {
+func InsertDecoder[TReq CommandReq[CommandRes]](catalog DecoderCatalog, decoder Decoder) {
 	catalog.Insert(reflect.TypeFor[TReq](), decoder)
 }
 
@@ -101,7 +107,7 @@ func InsertDecoder[TReq CommandReq[CommandRes]](catalog *DecoderCatalog, decoder
 // Returns:
 //   - A CommandReq[CommandRes] representing the decoded command request.
 //   - An error if the decoding fails or if no decoder is cataloged for the given request name.
-func (d *DecoderCatalog) Decode(reqType reflect.Type, reqJSON []byte) (req CommandReq[CommandRes], err error) {
+func (d *DefaultDecoderCatalog) Decode(reqType reflect.Type, reqJSON []byte) (req CommandReq[CommandRes], err error) {
 	d.mutex.RLock()
 	decoder, found := d.decoders[reqType]
 	d.mutex.RUnlock()

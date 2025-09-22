@@ -1,9 +1,10 @@
 package commands
 
 import (
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_NewMappingCatalog(t *testing.T) {
@@ -11,20 +12,20 @@ func Test_NewMappingCatalog(t *testing.T) {
 		catalog := NewMappingCatalog()
 		assert.NotNil(t, catalog)
 		assert.Empty(t, catalog.nameMappings)
-		assert.IsType(t, &MappingCatalog{}, catalog)
+		assert.IsType(t, &DefaultMappingCatalog{}, catalog)
 	})
 
 	t.Run("with options", func(t *testing.T) {
-		catalog := NewMappingCatalog(func(*MappingCatalog) {})
+		catalog := NewMappingCatalog(func(*DefaultMappingCatalog) {})
 		assert.NotNil(t, catalog)
 		assert.Empty(t, catalog.nameMappings)
-		assert.IsType(t, &MappingCatalog{}, catalog)
+		assert.IsType(t, &DefaultMappingCatalog{}, catalog)
 	})
 }
 
 func Test_MappingCatalog_Insert(t *testing.T) {
 	t.Run("empty catalog", func(t *testing.T) {
-		catalog := MappingCatalog{}
+		catalog := DefaultMappingCatalog{}
 		assert.Nil(t, catalog.nameMappings)
 		catalog.Insert(AddReqName, reflect.TypeFor[AddCommandReq]())
 		assert.NotEmpty(t, catalog.nameMappings)

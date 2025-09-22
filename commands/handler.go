@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dan-lugg/go-commands/futures"
-	"github.com/dan-lugg/go-commands/util"
 	"reflect"
 	"sync"
+
+	"github.com/dan-lugg/go-commands/futures"
+	"github.com/dan-lugg/go-commands/util"
 )
 
 var (
@@ -146,28 +147,35 @@ func (a *DefaultHandlerAdapter[TReq, TRes]) ResType() reflect.Type {
 	return reflect.TypeFor[TRes]()
 }
 
-// HandlerCatalog is a catalog for managing nameMappings between request types
+type HandlerCatalog interface {
+	Insert(adapter HandlerAdapter)
+	Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error)
+	Future(ctx context.Context, req CommandReq[CommandRes]) futures.Future[util.Tuple2[CommandRes, error]]
+	TypeMap() map[reflect.Type]reflect.Type
+}
+
+// DefaultHandlerCatalog is a catalog for managing nameMappings between request types
 // and their corresponding handler adapters.
 //
 // Fields:
 //   - adapters: A map that associates reflect.Type with HandlerAdapter instances,
 //     enabling the handling of specific request types.
-type HandlerCatalog struct {
+type DefaultHandlerCatalog struct {
 	mutex    sync.RWMutex
 	adapters map[reflect.Type]HandlerAdapter
 }
 
-type NewHandlerCatalogOption = util.Option[*HandlerCatalog]
+type NewDefaultHandlerCatalogOption = util.Option[*DefaultHandlerCatalog]
 
-// NewHandlerCatalog creates and returns a new instance of HandlerCatalog.
+// NewDefaultHandlerCatalog creates and returns a new instance of DefaultHandlerCatalog.
 //
 // The catalog is initialized with an empty map for adapters, which associates
 // reflect.Type with HandlerAdapter instances, enabling the handling of specific request types.
 //
 // Returns:
-//   - A pointer to a HandlerCatalog instance.
-func NewHandlerCatalog(options ...NewHandlerCatalogOption) *HandlerCatalog {
-	catalog := &HandlerCatalog{
+//   - A pointer to a DefaultHandlerCatalog instance.
+func NewDefaultHandlerCatalog(options ...NewDefaultHandlerCatalogOption) *DefaultHandlerCatalog {
+	catalog := &DefaultHandlerCatalog{
 		mutex:    sync.RWMutex{},
 		adapters: make(map[reflect.Type]HandlerAdapter),
 	}
@@ -177,11 +185,11 @@ func NewHandlerCatalog(options ...NewHandlerCatalogOption) *HandlerCatalog {
 	return catalog
 }
 
-// Insert adds a HandlerAdapter to the HandlerCatalog.
+// Insert adds a HandlerAdapter to the DefaultHandlerCatalog.
 //
 // Parameters:
 //   - adapter: The HandlerAdapter instance to catalog.
-func (r *HandlerCatalog) Insert(adapter HandlerAdapter) {
+func (r *DefaultHandlerCatalog) Insert(adapter HandlerAdapter) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	if r.adapters == nil {
@@ -199,7 +207,7 @@ func (r *HandlerCatalog) Insert(adapter HandlerAdapter) {
 // Returns:
 //   - res: A CommandRes representing the result of the command processing.
 //   - err: An error if no handler is cataloged for the request type or if the handler fails.
-func (r *HandlerCatalog) Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error) {
+func (r *DefaultHandlerCatalog) Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	reqType := reflect.TypeOf(req)
@@ -218,13 +226,13 @@ func (r *HandlerCatalog) Handle(ctx context.Context, req CommandReq[CommandRes])
 //
 // Parameters:
 //   - ctx: A context.Context providing context for the request processing.
-//   - catalog: A pointer to the HandlerCatalog containing the cataloged handlers.
+//   - catalog: A pointer to the DefaultHandlerCatalog containing the cataloged handlers.
 //   - req: A TReq representing the command request to be processed.
 //
 // Returns:
 //   - res: A TRes representing the result of the command processing.
 //   - err: An error if the request type does not match the expected type or if the handler fails.
-func Handle[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *HandlerCatalog, req TReq) (typedRes TRes, err error) {
+func Handle[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *DefaultHandlerCatalog, req TReq) (typedRes TRes, err error) {
 	res, err := catalog.Handle(ctx, req)
 	if errors.Is(err, ErrHandlerMissing) {
 		return *new(TRes), err
@@ -246,7 +254,7 @@ func Handle[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog
 //   - A futures.Future containing a util.Tuple2 where:
 //   - Val1 is the CommandRes representing the result of the command processing.
 //   - Val2 is an error if the processing fails.
-func (r *HandlerCatalog) Future(ctx context.Context, req CommandReq[CommandRes]) futures.Future[util.Tuple2[CommandRes, error]] {
+func (r *DefaultHandlerCatalog) Future(ctx context.Context, req CommandReq[CommandRes]) futures.Future[util.Tuple2[CommandRes, error]] {
 	return futures.Start(ctx, func(ctx context.Context) util.Tuple2[CommandRes, error] {
 		res, err := r.Handle(ctx, req)
 		return util.Tuple2[CommandRes, error]{
@@ -264,14 +272,14 @@ func (r *HandlerCatalog) Future(ctx context.Context, req CommandReq[CommandRes])
 //
 // Parameters:
 //   - ctx: A context.Context providing context for the request processing.
-//   - catalog: A pointer to the HandlerCatalog containing the cataloged handlers.
+//   - catalog: A pointer to the DefaultHandlerCatalog containing the cataloged handlers.
 //   - req: A TReq representing the command request to be processed.
 //
 // Returns:
 //   - A futures.Future containing a util.Tuple2 where:
 //   - Val1 is the TRes representing the result of the command processing.
 //   - Val2 is an error if the processing fails.
-func Future[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *HandlerCatalog, req TReq) futures.Future[util.Tuple2[TRes, error]] {
+func Future[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *DefaultHandlerCatalog, req TReq) futures.Future[util.Tuple2[TRes, error]] {
 	return futures.Start(ctx, func(ctx context.Context) util.Tuple2[TRes, error] {
 		tup := catalog.Future(ctx, req).Wait()
 		res, err := tup.Val1, tup.Val2
@@ -302,21 +310,21 @@ func Future[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog
 //   - TRes: The type of the command response, which must implement the CommandRes interface.
 //
 // Parameters:
-//   - catalog: A pointer to the HandlerCatalog where the handler will be cataloged.
+//   - catalog: A pointer to the DefaultHandlerCatalog where the handler will be cataloged.
 //   - factory: A HandlerFactory function that creates a new instance of a Handler for the specified request and response types.
-func InsertHandler[TReq CommandReq[TRes], TRes CommandRes](catalog *HandlerCatalog, factory HandlerFactory[TReq, TRes]) {
+func InsertHandler[TReq CommandReq[TRes], TRes CommandRes](catalog *DefaultHandlerCatalog, factory HandlerFactory[TReq, TRes]) {
 	catalog.Insert(NewDefaultHandlerAdapter(factory))
 }
 
 // TypeMap returns a mapping of request types to their corresponding response types.
 //
-// The method iterates over the cataloged adapters in the HandlerCatalog
+// The method iterates over the cataloged adapters in the DefaultHandlerCatalog
 // and constructs a map where the keys are the request types (reflect.Type)
 // and the values are the response types (reflect.Type) produced by the adapters.
 //
 // Returns:
 //   - typeMap: A map associating request types with their corresponding response types.
-func (r *HandlerCatalog) TypeMap() (typeMap map[reflect.Type]reflect.Type) {
+func (r *DefaultHandlerCatalog) TypeMap() (typeMap map[reflect.Type]reflect.Type) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	typeMap = make(map[reflect.Type]reflect.Type, len(r.adapters))

@@ -1,30 +1,31 @@
 package commands
 
 import (
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_NewDecoderCatalog(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		catalog := NewDecoderCatalog()
+		catalog := NewDefaultDecoderCatalog()
 		assert.NotNil(t, catalog)
 		assert.Empty(t, catalog.decoders)
-		assert.IsType(t, &DecoderCatalog{}, catalog)
+		assert.IsType(t, &DefaultDecoderCatalog{}, catalog)
 	})
 
 	t.Run("with options", func(t *testing.T) {
-		catalog := NewDecoderCatalog(func(*DecoderCatalog) {})
+		catalog := NewDefaultDecoderCatalog(func(*DefaultDecoderCatalog) {})
 		assert.NotNil(t, catalog)
 		assert.Empty(t, catalog.decoders)
-		assert.IsType(t, &DecoderCatalog{}, catalog)
+		assert.IsType(t, &DefaultDecoderCatalog{}, catalog)
 	})
 }
 
 func Test_DecoderCatalog_Insert(t *testing.T) {
 	t.Run("empty catalog", func(t *testing.T) {
-		catalog := DecoderCatalog{}
+		catalog := DefaultDecoderCatalog{}
 		assert.Nil(t, catalog.decoders)
 		catalog.Insert(reflect.TypeFor[AddCommandReq](), DefaultDecoder[AddCommandReq]())
 		assert.NotEmpty(t, catalog.decoders)
@@ -32,7 +33,7 @@ func Test_DecoderCatalog_Insert(t *testing.T) {
 	})
 
 	t.Run("constructed catalog", func(t *testing.T) {
-		catalog := NewDecoderCatalog()
+		catalog := NewDefaultDecoderCatalog()
 		assert.NotNil(t, catalog)
 		catalog.Insert(reflect.TypeFor[AddCommandReq](), DefaultDecoder[AddCommandReq]())
 		assert.NotEmpty(t, catalog.decoders)
@@ -41,14 +42,14 @@ func Test_DecoderCatalog_Insert(t *testing.T) {
 }
 
 func Test_InsertDecoder(t *testing.T) {
-	catalog := NewDecoderCatalog()
+	catalog := NewDefaultDecoderCatalog()
 	InsertDecoder[AddCommandReq](catalog, DefaultDecoder[AddCommandReq]())
 	assert.NotEmpty(t, catalog.decoders)
 	assert.Contains(t, catalog.decoders, reflect.TypeFor[AddCommandReq]())
 }
 
 func Test_DecoderCatalog_Decode(t *testing.T) {
-	catalog := NewDecoderCatalog()
+	catalog := NewDefaultDecoderCatalog()
 	InsertDecoder[AddCommandReq](catalog, DefaultDecoder[AddCommandReq]())
 
 	t.Run("valid input", func(t *testing.T) {

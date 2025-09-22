@@ -57,7 +57,12 @@ func WaitAll[R any](futures ...Future[R]) Future[[]R] {
 	})
 }
 
-func WaitAllMap[K comparable, R any](m map[K]Future[R]) Future[map[K]R] {
+// WaitMap takes a map of Future instances and returns a new Future
+// that resolves to a map containing the results of all the provided
+// Future instances. The keys in the resulting map correspond to the
+// keys in the input map, and the values are the results of the
+// respective Future computations.
+func WaitMap[K comparable, R any](m map[K]Future[R]) Future[map[K]R] {
 	return Start(context.Background(), func(ctx context.Context) map[K]R {
 		r := make(map[K]R, len(m))
 		for k, f := range m {

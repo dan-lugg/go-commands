@@ -65,7 +65,7 @@ func Test_RaceAll(t *testing.T) {
 			}
 			return Result2
 		})
-		
+
 		result := RaceAll(fut1, fut2, fut3).Wait()
 		duration := time.Since(start)
 
@@ -191,7 +191,7 @@ func Test_WaitAllMap(t *testing.T) {
 			"fut3": fut3,
 		}
 
-		results := WaitAllMap(futMap).Wait()
+		results := WaitMap(futMap).Wait()
 		duration := time.Since(start)
 
 		assert.Less(t, duration, 750*time.Millisecond)
@@ -203,7 +203,7 @@ func Test_WaitAllMap(t *testing.T) {
 	})
 
 	t.Run("empty", func(t *testing.T) {
-		results := WaitAllMap[string, string](map[string]Future[string]{}).Wait()
+		results := WaitMap[string, string](map[string]Future[string]{}).Wait()
 		assert.Len(t, results, 0)
 	})
 }

@@ -14,8 +14,8 @@ type SpecWriter struct {
 	title          string
 	version        string
 	description    string
-	mappingCatalog *commands.MappingCatalog
-	handlerCatalog *commands.HandlerCatalog
+	mappingCatalog *commands.DefaultMappingCatalog
+	handlerCatalog *commands.DefaultHandlerCatalog
 }
 
 type SpecWriterOption = util.Option[*SpecWriter]
@@ -38,7 +38,7 @@ func WithDescription(description string) SpecWriterOption {
 	}
 }
 
-func NewSpecWriter(mappingCatalog *commands.MappingCatalog, handlerCatalog *commands.HandlerCatalog, options ...SpecWriterOption) (specWriter *SpecWriter) {
+func NewSpecWriter(mappingCatalog *commands.DefaultMappingCatalog, handlerCatalog *commands.DefaultHandlerCatalog, options ...SpecWriterOption) (specWriter *SpecWriter) {
 	specWriter = &SpecWriter{
 		title:          "Commands API",
 		version:        "1.0.0",
