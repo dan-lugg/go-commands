@@ -3,30 +3,37 @@ package commands
 import (
 	"errors"
 	"fmt"
-	"github.com/dan-lugg/go-commands/util"
 	"reflect"
 	"sync"
+
+	"github.com/dan-lugg/go-commands/util"
 )
 
 var (
 	ErrMappingMissing = errors.New("mapping missing")
 )
 
-// MappingCatalog is a catalog for managing mappings between request names and types.
+type MappingCatalog interface {
+	Insert(reqName string, reqType reflect.Type)
+	ByName(reqName string) (reqType reflect.Type, err error)
+	ByType(reqType reflect.Type) (reqName string, err error)
+}
+
+// DefaultMappingCatalog is a catalog for managing mappings between request names and types.
 //
 // Fields:
 //   - mutex: A sync.RWMutex used to ensure thread-safe access to the catalog.
 //   - nameMappings: A map that associates request names (strings) with their corresponding reflect.Type.
 //   - typeMappings: A map that associates reflect.Type with their corresponding request names (strings).
-type MappingCatalog struct {
+type DefaultMappingCatalog struct {
 	mutex        sync.RWMutex
 	nameMappings map[string]reflect.Type
 	typeMappings map[reflect.Type]string
 }
 
-type NewMappingCatalogOption = util.Option[*MappingCatalog]
+type NewMappingCatalogOption = util.Option[*DefaultMappingCatalog]
 
-// NewMappingCatalog creates and returns a new instance of MappingCatalog.
+// NewMappingCatalog creates and returns a new instance of DefaultMappingCatalog.
 //
 // The catalog is initialized with:
 //   - A sync.RWMutex for thread-safe access.
@@ -34,9 +41,9 @@ type NewMappingCatalogOption = util.Option[*MappingCatalog]
 //   - typeMappings: A map associating reflect.Type with their corresponding request names (strings).
 //
 // Returns:
-//   - A pointer to a MappingCatalog instance.
-func NewMappingCatalog(options ...NewMappingCatalogOption) (catalog *MappingCatalog) {
-	catalog = &MappingCatalog{
+//   - A pointer to a DefaultMappingCatalog instance.
+func NewMappingCatalog(options ...NewMappingCatalogOption) (catalog *DefaultMappingCatalog) {
+	catalog = &DefaultMappingCatalog{
 		mutex:        sync.RWMutex{},
 		nameMappings: make(map[string]reflect.Type),
 		typeMappings: make(map[reflect.Type]string),
@@ -52,7 +59,7 @@ func NewMappingCatalog(options ...NewMappingCatalogOption) (catalog *MappingCata
 // Parameters:
 //   - reqName: A string representing the name of the request.
 //   - reqType: A reflect.Type representing the type of the request.
-func (m *MappingCatalog) Insert(reqName string, reqType reflect.Type) {
+func (m *DefaultMappingCatalog) Insert(reqName string, reqType reflect.Type) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if m.nameMappings == nil {
@@ -73,7 +80,7 @@ func (m *MappingCatalog) Insert(reqName string, reqType reflect.Type) {
 // Returns:
 //   - reqType: The reflect.Type associated with the given request name.
 //   - err: An error if no mapping is cataloged for the given request name.
-func (m *MappingCatalog) ByName(reqName string) (reqType reflect.Type, err error) {
+func (m *DefaultMappingCatalog) ByName(reqName string) (reqType reflect.Type, err error) {
 	var ok bool
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -91,7 +98,7 @@ func (m *MappingCatalog) ByName(reqName string) (reqType reflect.Type, err error
 // Returns:
 //   - reqName: A string representing the name of the request associated with the given type.
 //   - err: An error if no mapping is cataloged for the given request type.
-func (m *MappingCatalog) ByType(reqType reflect.Type) (reqName string, err error) {
+func (m *DefaultMappingCatalog) ByType(reqType reflect.Type) (reqName string, err error) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 	var ok bool
@@ -107,8 +114,8 @@ func (m *MappingCatalog) ByType(reqType reflect.Type) (reqName string, err error
 //   - TReq: The type of the command request, which must implement the CommandReq interface.
 //
 // Parameters:
-//   - catalog: A pointer to the MappingCatalog where the mapping will be cataloged.
+//   - catalog: A pointer to the DefaultMappingCatalog where the mapping will be cataloged.
 //   - reqName: A string representing the name of the request.
-func InsertMapping[TReq CommandReq[CommandRes]](catalog *MappingCatalog, reqName string) {
+func InsertMapping[TReq CommandReq[CommandRes]](catalog *DefaultMappingCatalog, reqName string) {
 	catalog.Insert(reqName, reflect.TypeFor[TReq]())
 }

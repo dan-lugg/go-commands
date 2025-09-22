@@ -2,12 +2,13 @@ package commands
 
 import (
 	"context"
-	"github.com/dan-lugg/go-commands/futures"
-	"github.com/dan-lugg/go-commands/util"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/dan-lugg/go-commands/futures"
+	"github.com/dan-lugg/go-commands/util"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_NewDefaultHandlerAdapter(t *testing.T) {
@@ -52,23 +53,23 @@ func Test_DefaultHandlerAdapter_ResType(t *testing.T) {
 
 func Test_NewHandlerCatalog(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		catalog := NewHandlerCatalog()
+		catalog := NewDefaultHandlerCatalog()
 		assert.NotNil(t, catalog)
 		assert.Empty(t, catalog.adapters)
-		assert.IsType(t, &HandlerCatalog{}, catalog)
+		assert.IsType(t, &DefaultHandlerCatalog{}, catalog)
 	})
 
 	t.Run("with options", func(t *testing.T) {
-		catalog := NewHandlerCatalog(func(*HandlerCatalog) {})
+		catalog := NewDefaultHandlerCatalog(func(*DefaultHandlerCatalog) {})
 		assert.NotNil(t, catalog)
 		assert.Empty(t, catalog.adapters)
-		assert.IsType(t, &HandlerCatalog{}, catalog)
+		assert.IsType(t, &DefaultHandlerCatalog{}, catalog)
 	})
 }
 
 func Test_HandlerCatalog_Insert(t *testing.T) {
 	t.Run("empty catalog", func(t *testing.T) {
-		catalog := HandlerCatalog{}
+		catalog := DefaultHandlerCatalog{}
 		assert.Nil(t, catalog.adapters)
 		adapter := NewDefaultHandlerAdapter(func() Handler[AddCommandReq, AddCommandRes] {
 			return &AddHandler{}
@@ -79,7 +80,7 @@ func Test_HandlerCatalog_Insert(t *testing.T) {
 	})
 
 	t.Run("constructed catalog", func(t *testing.T) {
-		catalog := NewHandlerCatalog()
+		catalog := NewDefaultHandlerCatalog()
 		assert.NotNil(t, catalog)
 		adapter := NewDefaultHandlerAdapter(func() Handler[AddCommandReq, AddCommandRes] {
 			return &AddHandler{}
@@ -91,7 +92,7 @@ func Test_HandlerCatalog_Insert(t *testing.T) {
 }
 
 func Test_InsertHandler(t *testing.T) {
-	catalog := NewHandlerCatalog()
+	catalog := NewDefaultHandlerCatalog()
 	InsertHandler[AddCommandReq, AddCommandRes](catalog, func() Handler[AddCommandReq, AddCommandRes] {
 		return &AddHandler{}
 	})
@@ -100,7 +101,7 @@ func Test_InsertHandler(t *testing.T) {
 }
 
 func Test_HandlerCatalog_Handle(t *testing.T) {
-	catalog := NewHandlerCatalog()
+	catalog := NewDefaultHandlerCatalog()
 	InsertHandler[AddCommandReq, AddCommandRes](catalog, func() Handler[AddCommandReq, AddCommandRes] {
 		return &AddHandler{}
 	})
@@ -119,7 +120,7 @@ func Test_HandlerCatalog_Handle(t *testing.T) {
 }
 
 func Test_HandlerCatalog_Future(t *testing.T) {
-	catalog := NewHandlerCatalog()
+	catalog := NewDefaultHandlerCatalog()
 	InsertHandler[AddCommandReq, AddCommandRes](catalog, func() Handler[AddCommandReq, AddCommandRes] {
 		return &AddHandler{}
 	})
@@ -215,7 +216,7 @@ func Test_HandlerCatalog_Future(t *testing.T) {
 }
 
 func Test_HandlerCatalog_TypeMap(t *testing.T) {
-	catalog := NewHandlerCatalog()
+	catalog := NewDefaultHandlerCatalog()
 	InsertHandler[AddCommandReq, AddCommandRes](catalog, func() Handler[AddCommandReq, AddCommandRes] {
 		return &AddHandler{}
 	})
