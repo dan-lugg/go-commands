@@ -27,7 +27,7 @@ func Test_DecoderCatalog_Insert(t *testing.T) {
 	t.Run("empty catalog", func(t *testing.T) {
 		catalog := DefaultDecoderCatalog{}
 		assert.Nil(t, catalog.decoders)
-		catalog.Insert(reflect.TypeFor[AddCommandReq](), DefaultDecoder[AddCommandReq]())
+		catalog.Insert(reflect.TypeFor[AddCommandReq](), NewDefaultDecoder[AddCommandReq]())
 		assert.NotEmpty(t, catalog.decoders)
 		assert.Contains(t, catalog.decoders, reflect.TypeFor[AddCommandReq]())
 	})
@@ -35,7 +35,7 @@ func Test_DecoderCatalog_Insert(t *testing.T) {
 	t.Run("constructed catalog", func(t *testing.T) {
 		catalog := NewDefaultDecoderCatalog()
 		assert.NotNil(t, catalog)
-		catalog.Insert(reflect.TypeFor[AddCommandReq](), DefaultDecoder[AddCommandReq]())
+		catalog.Insert(reflect.TypeFor[AddCommandReq](), NewDefaultDecoder[AddCommandReq]())
 		assert.NotEmpty(t, catalog.decoders)
 		assert.Contains(t, catalog.decoders, reflect.TypeFor[AddCommandReq]())
 	})
@@ -43,14 +43,14 @@ func Test_DecoderCatalog_Insert(t *testing.T) {
 
 func Test_InsertDecoder(t *testing.T) {
 	catalog := NewDefaultDecoderCatalog()
-	InsertDecoder[AddCommandReq](catalog, DefaultDecoder[AddCommandReq]())
+	InsertDecoder[AddCommandReq](catalog, NewDefaultDecoder[AddCommandReq]())
 	assert.NotEmpty(t, catalog.decoders)
 	assert.Contains(t, catalog.decoders, reflect.TypeFor[AddCommandReq]())
 }
 
 func Test_DecoderCatalog_Decode(t *testing.T) {
 	catalog := NewDefaultDecoderCatalog()
-	InsertDecoder[AddCommandReq](catalog, DefaultDecoder[AddCommandReq]())
+	InsertDecoder[AddCommandReq](catalog, NewDefaultDecoder[AddCommandReq]())
 
 	t.Run("valid input", func(t *testing.T) {
 		req, err := catalog.Decode(reflect.TypeFor[AddCommandReq](), []byte(`{"argX": 3, "argY": 4}`))
@@ -79,7 +79,7 @@ func Test_DecoderCatalog_Decode(t *testing.T) {
 }
 
 func Test_DefaultCommandReqDecoder(t *testing.T) {
-	decoder := DefaultDecoder[AddCommandReq]()
+	decoder := NewDefaultDecoder[AddCommandReq]()
 
 	t.Run("valid input", func(t *testing.T) {
 		req, err := decoder([]byte(`{"argX": 3, "argY": 4}`))

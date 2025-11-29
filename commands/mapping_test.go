@@ -9,14 +9,14 @@ import (
 
 func Test_NewMappingCatalog(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		catalog := NewMappingCatalog()
+		catalog := NewDefaultMappingCatalog()
 		assert.NotNil(t, catalog)
 		assert.Empty(t, catalog.nameMappings)
 		assert.IsType(t, &DefaultMappingCatalog{}, catalog)
 	})
 
 	t.Run("with options", func(t *testing.T) {
-		catalog := NewMappingCatalog(func(*DefaultMappingCatalog) {})
+		catalog := NewDefaultMappingCatalog(func(*DefaultMappingCatalog) {})
 		assert.NotNil(t, catalog)
 		assert.Empty(t, catalog.nameMappings)
 		assert.IsType(t, &DefaultMappingCatalog{}, catalog)
@@ -33,7 +33,7 @@ func Test_MappingCatalog_Insert(t *testing.T) {
 	})
 
 	t.Run("constructed catalog", func(t *testing.T) {
-		catalog := NewMappingCatalog()
+		catalog := NewDefaultMappingCatalog()
 		assert.NotNil(t, catalog)
 		catalog.Insert(AddReqName, reflect.TypeFor[AddCommandReq]())
 		assert.NotEmpty(t, catalog.nameMappings)
@@ -42,7 +42,7 @@ func Test_MappingCatalog_Insert(t *testing.T) {
 }
 
 func Test_MappingCatalog_ByName(t *testing.T) {
-	catalog := NewMappingCatalog()
+	catalog := NewDefaultMappingCatalog()
 	InsertMapping[AddCommandReq](catalog, AddReqName)
 
 	t.Run("default", func(t *testing.T) {
@@ -60,7 +60,7 @@ func Test_MappingCatalog_ByName(t *testing.T) {
 }
 
 func Test_MappingCatalog_ByType(t *testing.T) {
-	catalog := NewMappingCatalog()
+	catalog := NewDefaultMappingCatalog()
 	InsertMapping[AddCommandReq](catalog, AddReqName)
 
 	t.Run("default", func(t *testing.T) {

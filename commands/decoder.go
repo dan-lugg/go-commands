@@ -20,17 +20,25 @@ var (
 // serialized command request data into a specific command request type.
 type Decoder func([]byte) (CommandReq[CommandRes], error)
 
-// DefaultDecoder returns a Decoder function for decoding
+// NewDefaultDecoder returns a Decoder function for decoding
 // serialized command request data into a specific command request type.
 // The generic type TReq must implement the CommandReq[CommandRes] interface.
 //
 // The returned decoder function takes a byte slice as input, attempts to
 // unmarshal it into the specified TReq type, and returns the decoded
 // command request or an error if unmarshalling fails.
-func DefaultDecoder[TReq CommandReq[CommandRes]]() Decoder {
+func NewDefaultDecoder[TReq CommandReq[CommandRes]]() Decoder {
 	return func(data []byte) (CommandReq[CommandRes], error) {
 		var commandReq TReq
 		if err := json.Unmarshal(data, &commandReq); err != nil {
+			var syntaxErr *json.SyntaxError
+			if errors.As(err, &syntaxErr) {
+				return nil, fmt.Errorf("%w: at byte offset %d", err, syntaxErr.Offset)
+			}
+			var unmarshalTypeErr *json.UnmarshalTypeError
+			if errors.As(err, &unmarshalTypeErr) {
+				return nil, fmt.Errorf("%w: at byte offset %d", err, unmarshalTypeErr.Offset)
+			}
 			return nil, err
 		}
 		return commandReq, nil
@@ -39,10 +47,10 @@ func DefaultDecoder[TReq CommandReq[CommandRes]]() Decoder {
 
 type DecoderCatalog interface {
 	Insert(reqType reflect.Type, decoder Decoder)
-	Decode(reqType reflect.Type, reqJSON []byte) (CommandReq[CommandRes], error)
+	Decode(reqType reflect.Type, reqData []byte) (CommandReq[CommandRes], error)
 }
 
-// DecoderCatalog is a catalog for managing nameMappings between request names,
+// DefaultDecoderCatalog is a catalog for managing nameMappings between request names,
 // their corresponding types, and decoders. It allows decoding serialized
 // command request data into specific command request types.
 //
@@ -107,14 +115,14 @@ func InsertDecoder[TReq CommandReq[CommandRes]](catalog DecoderCatalog, decoder 
 // Returns:
 //   - A CommandReq[CommandRes] representing the decoded command request.
 //   - An error if the decoding fails or if no decoder is cataloged for the given request name.
-func (d *DefaultDecoderCatalog) Decode(reqType reflect.Type, reqJSON []byte) (req CommandReq[CommandRes], err error) {
+func (d *DefaultDecoderCatalog) Decode(reqType reflect.Type, reqData []byte) (req CommandReq[CommandRes], err error) {
 	d.mutex.RLock()
 	decoder, found := d.decoders[reqType]
 	d.mutex.RUnlock()
 	if !found {
 		return nil, fmt.Errorf("%w: req type: %s", ErrDecoderMissing, reqType)
 	}
-	req, err = decoder(reqJSON)
+	req, err = decoder(reqData)
 	if req == nil {
 		return nil, fmt.Errorf("%w: req is nil", ErrDecoderFailure)
 	}

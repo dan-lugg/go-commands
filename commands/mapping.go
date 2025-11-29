@@ -33,7 +33,7 @@ type DefaultMappingCatalog struct {
 
 type NewMappingCatalogOption = util.Option[*DefaultMappingCatalog]
 
-// NewMappingCatalog creates and returns a new instance of DefaultMappingCatalog.
+// NewDefaultMappingCatalog creates and returns a new instance of DefaultMappingCatalog.
 //
 // The catalog is initialized with:
 //   - A sync.RWMutex for thread-safe access.
@@ -42,7 +42,7 @@ type NewMappingCatalogOption = util.Option[*DefaultMappingCatalog]
 //
 // Returns:
 //   - A pointer to a DefaultMappingCatalog instance.
-func NewMappingCatalog(options ...NewMappingCatalogOption) (catalog *DefaultMappingCatalog) {
+func NewDefaultMappingCatalog(options ...NewMappingCatalogOption) (catalog *DefaultMappingCatalog) {
 	catalog = &DefaultMappingCatalog{
 		mutex:        sync.RWMutex{},
 		nameMappings: make(map[string]reflect.Type),

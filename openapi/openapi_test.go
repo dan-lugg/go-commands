@@ -60,7 +60,7 @@ func (h *SubHandler) Handle(ctx context.Context, req SubCommandReq) (res SubComm
 
 func TestNewSpecWriter(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		mappingCatalog := commands.NewMappingCatalog()
+		mappingCatalog := commands.NewDefaultMappingCatalog()
 		handlerCatalog := commands.NewDefaultHandlerCatalog()
 		specWriter := NewSpecWriter(mappingCatalog, handlerCatalog)
 		assert.Equal(t, specWriter.mappingCatalog, mappingCatalog)
@@ -68,7 +68,7 @@ func TestNewSpecWriter(t *testing.T) {
 	})
 
 	t.Run("with options", func(t *testing.T) {
-		mappingCatalog := commands.NewMappingCatalog()
+		mappingCatalog := commands.NewDefaultMappingCatalog()
 		handlerCatalog := commands.NewDefaultHandlerCatalog()
 		specWriter := NewSpecWriter(mappingCatalog, handlerCatalog,
 			WithTitle("Test API"),
@@ -83,7 +83,7 @@ func TestNewSpecWriter(t *testing.T) {
 }
 
 func TestSpecWriter_CreatePathItem(t *testing.T) {
-	mappingCatalog := commands.NewMappingCatalog()
+	mappingCatalog := commands.NewDefaultMappingCatalog()
 	handlerCatalog := commands.NewDefaultHandlerCatalog()
 	specWriter := NewSpecWriter(mappingCatalog, handlerCatalog)
 	reqType := reflect.TypeFor[AddCommandReq]()
@@ -95,7 +95,7 @@ func TestSpecWriter_CreatePathItem(t *testing.T) {
 
 func TestSpecWriter_WriteSpec(t *testing.T) {
 	const ExpectSpec = `{"info":{"description":"API for handling commands","title":"Commands API","version":"1.0.0"},"openapi":"3.0.0","paths":{"/add":{"post":{"description":"Handles the add command","operationId":"add","requestBody":{"content":{"application/json":{"schema":{"properties":{"argX":{"$ref":"int"},"argY":{"$ref":"int"}},"type":"object"}}},"required":true},"responses":{"200":{"content":{"application/json":{"schema":{"properties":{"result":{"$ref":"int"}},"type":"object"}}}},"default":{"description":""}},"summary":"HandleRaw add"}},"/sub":{"post":{"description":"Handles the sub command","operationId":"sub","requestBody":{"content":{"application/json":{"schema":{"properties":{"argX":{"$ref":"int"},"argY":{"$ref":"int"}},"type":"object"}}},"required":true},"responses":{"200":{"content":{"application/json":{"schema":{"properties":{"result":{"$ref":"int"}},"type":"object"}}}},"default":{"description":""}},"summary":"HandleRaw sub"}}}}`
-	mappingCatalog := commands.NewMappingCatalog()
+	mappingCatalog := commands.NewDefaultMappingCatalog()
 	handlerCatalog := commands.NewDefaultHandlerCatalog()
 	specWriter := NewSpecWriter(mappingCatalog, handlerCatalog)
 	commands.InsertHandler[AddCommandReq, AddCommandRes](handlerCatalog, func() commands.Handler[AddCommandReq, AddCommandRes] {
