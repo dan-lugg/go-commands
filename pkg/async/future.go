@@ -56,35 +56,35 @@ func WaitAll[R any](ctx context.Context, fns ...FutureFunc[R]) Future[[]R] {
 		return Value([]R{})
 	}
 	fts := make([]Future[R], len(fns))
-	for i := 0; i < len(fns); i++ {
-		fts[i] = Start(ctx, fns[i])
+	for i, fn := range fns {
+		fts[i] = Start(ctx, fn)
 	}
 	return Start(nil, func(ctx context.Context) []R {
 		r := make([]R, len(fts))
-		for i, f := range fts {
-			r[i] = f.Wait()
+		for i, ft := range fts {
+			r[i] = ft.Wait()
 		}
 		return r
 	})
 }
 
-// WaitMap takes a map of Future instances and returns a new Future
+// WaitAllMap takes a map of Future instances and returns a new Future
 // that resolves to a map containing the results of all the provided
 // Future instances. The keys in the resulting map correspond to the
 // keys in the input map, and the values are the results of the
 // respective Future computations.
-func WaitMap[K comparable, R any](ctx context.Context, fnm map[K]FutureFunc[R]) Future[map[K]R] {
+func WaitAllMap[K comparable, R any](ctx context.Context, fnm map[K]FutureFunc[R]) Future[map[K]R] {
 	if len(fnm) == 0 {
 		return Value(map[K]R{})
 	}
 	ftm := make(map[K]Future[R], len(fnm))
-	for k, f := range fnm {
-		ftm[k] = Start(ctx, f)
+	for k, fn := range fnm {
+		ftm[k] = Start(ctx, fn)
 	}
 	return Start(nil, func(ctx context.Context) map[K]R {
 		r := make(map[K]R, len(ftm))
-		for k, f := range ftm {
-			r[k] = f.Wait()
+		for k, ft := range ftm {
+			r[k] = ft.Wait()
 		}
 		return r
 	})
@@ -98,13 +98,15 @@ func RaceAll[R any](ctx context.Context, fns ...FutureFunc[R]) Future[R] {
 	if len(fns) == 0 {
 		return Value(*new(R))
 	}
+	ctx, cancel := context.WithCancel(ctx)
 	fts := make([]Future[R], len(fns))
-	for i := 0; i < len(fns); i++ {
+	for i := range fns {
 		fts[i] = Start(ctx, fns[i])
 	}
 	return Start(nil, func(ctx context.Context) R {
+		defer cancel()
 		ch := make(chan R, len(fts))
-		for i := 0; i < len(fts); i++ {
+		for i := range fts {
 			i_ := i
 			go func() {
 				ch <- fts[i_].Wait()
@@ -122,19 +124,20 @@ func RaceAllMap[K comparable, R any](ctx context.Context, fnm map[K]FutureFunc[R
 	if len(fnm) == 0 {
 		return Value(util.Tuple2[K, R]{})
 	}
+	ctx, cancel := context.WithCancel(ctx)
 	ftm := make(map[K]Future[R], len(fnm))
-	for k, f := range fnm {
-		ftm[k] = Start(ctx, f)
+	for k := range fnm {
+		ftm[k] = Start(ctx, fnm[k])
 	}
 	return Start(nil, func(ctx context.Context) util.Tuple2[K, R] {
+		defer cancel()
 		ch := make(chan util.Tuple2[K, R], len(fnm))
 		for k := range fnm {
 			k_ := k
-			f_ := Start(ctx, fnm[k_])
 			go func() {
 				ch <- util.Tuple2[K, R]{
 					Val1: k_,
-					Val2: f_.Wait(),
+					Val2: ftm[k_].Wait(),
 				}
 			}()
 		}

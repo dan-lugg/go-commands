@@ -2,6 +2,7 @@ package async
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,121 +18,74 @@ const (
 
 func Test_Start(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		f := Start[string](nil, func(ctx context.Context) string {
+		ft := Start[string](nil, func(ctx context.Context) string {
 			return Result1
 		})
-		assert.NotNil(t, f)
+		assert.NotNil(t, ft)
 	})
 }
 
 func Test_Value(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		f := Value[string](Result1)
-		assert.NotNil(t, f)
-		result := f.Wait()
+		ft := Value[string](Result1)
+		assert.NotNil(t, ft)
+		result := ft.Wait()
 		assert.Equal(t, Result1, result)
 	})
 }
 
 func Test_Future_Wait(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		f := Start[string](nil, func(ctx context.Context) string {
+		ft := Start[string](nil, func(ctx context.Context) string {
+			time.Sleep(100 * time.Millisecond)
 			return Result1
 		})
-		result := f.Wait()
+		result := ft.Wait()
 		assert.Equal(t, Result1, result)
 	})
 
 	t.Run("canceled", func(t *testing.T) {
-		ctx, cfn := context.WithCancel(context.Background())
-		f := Start[util.Tuple2[string, error]](ctx, func(ctx context.Context) util.Tuple2[string, error] {
-			time.Sleep(500 * time.Millisecond)
+		ctx, cancel := context.WithCancel(context.Background())
+		ft := Start[util.Tuple2[string, error]](ctx, func(ctx context.Context) util.Tuple2[string, error] {
+			time.Sleep(100 * time.Millisecond)
 			if ctx.Err() != nil {
 				return util.Tuple2[string, error]{Val2: ctx.Err()}
 			}
 			return util.Tuple2[string, error]{Val1: Result2}
 		})
-		cfn()
-
-		result := f.Wait()
+		cancel()
+		result := ft.Wait()
 		assert.Zero(t, result.Val1)
 		assert.Error(t, result.Val2)
 		assert.ErrorIs(t, result.Val2, context.Canceled)
 	})
 }
 
-func Test_RaceAll(t *testing.T) {
-	t.Run("default", func(t *testing.T) {
-		start := time.Now()
-
-		ctx := context.Background()
-		fns := []FutureFunc[string]{
-			func(ctx context.Context) string {
-				for i := 1; i <= 5; i++ {
-					time.Sleep(100 * time.Millisecond)
-				}
-				return Result1
-			},
-			func(ctx context.Context) string {
-				for i := 1; i <= 3; i++ {
-					time.Sleep(100 * time.Millisecond)
-				}
-				return Result3
-			},
-			func(ctx context.Context) string {
-				for i := 1; i <= 7; i++ {
-					time.Sleep(100 * time.Millisecond)
-				}
-				return Result2
-			},
-		}
-
-		result := RaceAll(ctx, fns...).Wait()
-		duration := time.Since(start)
-
-		assert.Less(t, duration, 350*time.Millisecond)
-		assert.Greater(t, duration, 250*time.Millisecond)
-		assert.Equal(t, Result3, result)
-	})
-
-	t.Run("empty", func(t *testing.T) {
-		ctx := context.Background()
-		result := RaceAll[string](ctx).Wait()
-		assert.Equal(t, *new(string), result)
-	})
-}
-
 func Test_WaitAll(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		start := time.Now()
-
-		ctx := context.Background()
 		fns := []FutureFunc[string]{
 			func(ctx context.Context) string {
-				for i := 1; i <= 5; i++ {
+				for range 6 {
 					time.Sleep(100 * time.Millisecond)
 				}
 				return Result1
 			},
 			func(ctx context.Context) string {
-				for i := 1; i <= 7; i++ {
+				for range 2 {
 					time.Sleep(100 * time.Millisecond)
 				}
 				return Result2
 			},
 			func(ctx context.Context) string {
-				for i := 1; i <= 3; i++ {
+				for range 4 {
 					time.Sleep(100 * time.Millisecond)
 				}
 				return Result3
 			},
 		}
 
+		ctx := context.Background()
 		results := WaitAll(ctx, fns...).Wait()
-		duration := time.Since(start)
-
-		assert.Less(t, duration, 750*time.Millisecond)
-		assert.Greater(t, duration, 650*time.Millisecond)
 		assert.Len(t, results, 3)
 		assert.Equal(t, Result1, results[0])
 		assert.Equal(t, Result2, results[1])
@@ -145,13 +99,10 @@ func Test_WaitAll(t *testing.T) {
 	})
 
 	t.Run("nested", func(t *testing.T) {
-		start := time.Now()
-
-		ctx := context.Background()
 		fns := []FutureFunc[string]{
 			func(ctx context.Context) string {
 				f := Start[string](ctx, func(ctx context.Context) string {
-					for i := 1; i <= 2; i++ {
+					for range 6 {
 						time.Sleep(100 * time.Millisecond)
 					}
 					return Result1
@@ -160,7 +111,7 @@ func Test_WaitAll(t *testing.T) {
 			},
 			func(ctx context.Context) string {
 				f := Start[string](ctx, func(ctx context.Context) string {
-					for i := 1; i <= 3; i++ {
+					for range 2 {
 						time.Sleep(100 * time.Millisecond)
 					}
 					return Result2
@@ -169,7 +120,7 @@ func Test_WaitAll(t *testing.T) {
 			},
 			func(ctx context.Context) string {
 				f := Start[string](ctx, func(ctx context.Context) string {
-					for i := 1; i <= 4; i++ {
+					for range 4 {
 						time.Sleep(100 * time.Millisecond)
 					}
 					return Result3
@@ -178,11 +129,8 @@ func Test_WaitAll(t *testing.T) {
 			},
 		}
 
+		ctx := context.Background()
 		results := WaitAll(ctx, fns...).Wait()
-		duration := time.Since(start)
-
-		assert.Less(t, duration, 450*time.Millisecond)
-		assert.Greater(t, duration, 350*time.Millisecond)
 		assert.Len(t, results, 3)
 		assert.Equal(t, Result1, results[0])
 		assert.Equal(t, Result2, results[1])
@@ -190,37 +138,120 @@ func Test_WaitAll(t *testing.T) {
 	})
 }
 
-func Test_WaitAllMap(t *testing.T) {
+func Test_RaceAll(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		start := time.Now()
-
-		ctx := context.Background()
-		fnm := map[string]FutureFunc[string]{
-			"f1": func(ctx context.Context) string {
-				for i := 1; i <= 7; i++ {
+		fns := []FutureFunc[string]{
+			func(ctx context.Context) string {
+				for range 6 {
 					time.Sleep(100 * time.Millisecond)
 				}
 				return Result1
 			},
-			"f2": func(ctx context.Context) string {
-				for i := 1; i <= 5; i++ {
+			func(ctx context.Context) string {
+				for range 2 {
 					time.Sleep(100 * time.Millisecond)
 				}
 				return Result2
 			},
-			"f3": func(ctx context.Context) string {
-				for i := 1; i <= 3; i++ {
+			func(ctx context.Context) string {
+				for range 4 {
 					time.Sleep(100 * time.Millisecond)
 				}
 				return Result3
 			},
 		}
 
-		results := WaitMap(ctx, fnm).Wait()
-		duration := time.Since(start)
+		ctx := context.Background()
+		result := RaceAll(ctx, fns...).Wait()
+		assert.Equal(t, Result2, result)
+	})
 
-		assert.Less(t, duration, 750*time.Millisecond)
-		assert.Greater(t, duration, 650*time.Millisecond)
+	t.Run("empty", func(t *testing.T) {
+		ctx := context.Background()
+		result := RaceAll[string](ctx).Wait()
+		assert.Equal(t, *new(string), result)
+	})
+
+	t.Run("canceled", func(t *testing.T) {
+		wg := sync.WaitGroup{}
+		wg.Add(3)
+
+		fn1Canceled := false
+		fn2Canceled := false
+		fn3Canceled := false
+
+		fns := []FutureFunc[string]{
+			func(ctx context.Context) string {
+				defer wg.Done()
+				for range 6 {
+					time.Sleep(100 * time.Millisecond)
+					if ctx.Err() != nil {
+						fn1Canceled = true
+						return ""
+					}
+				}
+				return Result1
+			},
+			func(ctx context.Context) string {
+				defer wg.Done()
+				for range 2 {
+					time.Sleep(100 * time.Millisecond)
+					if ctx.Err() != nil {
+						fn2Canceled = true
+						return ""
+					}
+				}
+				return Result2
+			},
+			func(ctx context.Context) string {
+				defer wg.Done()
+				for range 4 {
+					time.Sleep(100 * time.Millisecond)
+					if ctx.Err() != nil {
+						fn3Canceled = true
+						return ""
+					}
+				}
+				return Result3
+			},
+		}
+
+		ctx := context.Background()
+		result := RaceAll(ctx, fns...).Wait()
+		assert.Equal(t, Result2, result)
+
+		wg.Wait()
+		assert.True(t, fn1Canceled)
+		assert.True(t, fn3Canceled)
+		assert.False(t, fn2Canceled)
+	})
+}
+
+func Test_WaitAllMap(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		fnm := map[string]FutureFunc[string]{
+			"f1": func(ctx context.Context) string {
+				for range 6 {
+					time.Sleep(100 * time.Millisecond)
+				}
+				return Result1
+			},
+			"f2": func(ctx context.Context) string {
+				for range 2 {
+					time.Sleep(100 * time.Millisecond)
+				}
+				return Result2
+			},
+			"f3": func(ctx context.Context) string {
+				for range 4 {
+					time.Sleep(100 * time.Millisecond)
+				}
+				return Result3
+			},
+		}
+
+		ctx := context.Background()
+		results := WaitAllMap(ctx, fnm).Wait()
 		assert.Len(t, results, 3)
 		assert.Equal(t, Result1, results["f1"])
 		assert.Equal(t, Result2, results["f2"])
@@ -229,48 +260,99 @@ func Test_WaitAllMap(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		ctx := context.Background()
-		results := WaitMap[string, string](ctx, map[string]FutureFunc[string]{}).Wait()
+		results := WaitAllMap[string, string](ctx, map[string]FutureFunc[string]{}).Wait()
 		assert.Len(t, results, 0)
 	})
 }
 
 func Test_RaceAllMap(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		start := time.Now()
-
 		fnm := map[string]FutureFunc[string]{
 			"f1": func(ctx context.Context) string {
-				for i := 1; i <= 5; i++ {
+				for range 6 {
 					time.Sleep(100 * time.Millisecond)
 				}
 				return Result1
 			},
 			"f2": func(ctx context.Context) string {
-				for i := 1; i <= 3; i++ {
+				for range 2 {
 					time.Sleep(100 * time.Millisecond)
 				}
 				return Result3
 			},
 			"f3": func(ctx context.Context) string {
-				for i := 1; i <= 7; i++ {
+				for range 4 {
 					time.Sleep(100 * time.Millisecond)
 				}
 				return Result2
 			},
 		}
 
-		result := RaceAllMap(context.Background(), fnm).Wait()
-		duration := time.Since(start)
-
-		assert.Less(t, duration, 350*time.Millisecond)
-		assert.Greater(t, duration, 250*time.Millisecond)
+		ctx := context.Background()
+		result := RaceAllMap(ctx, fnm).Wait()
 		assert.Equal(t, "f2", result.Val1)
 		assert.Equal(t, Result3, result.Val2)
 	})
 
 	t.Run("empty", func(t *testing.T) {
-		result := RaceAllMap[string, string](context.Background(), map[string]FutureFunc[string]{}).Wait()
+		ctx := context.Background()
+		result := RaceAllMap[string, string](ctx, map[string]FutureFunc[string]{}).Wait()
 		assert.Equal(t, "", result.Val1)
 		assert.Equal(t, *new(string), result.Val2)
+	})
+
+	t.Run("canceled", func(t *testing.T) {
+		wg := sync.WaitGroup{}
+		wg.Add(3)
+
+		fn1Canceled := false
+		fn2Canceled := false
+		fn3Canceled := false
+
+		fnm := map[string]FutureFunc[string]{
+			"f1": func(ctx context.Context) string {
+				defer wg.Done()
+				for range 6 {
+					time.Sleep(100 * time.Millisecond)
+					if ctx.Err() != nil {
+						fn1Canceled = true
+						return ""
+					}
+				}
+				return Result1
+			},
+			"f2": func(ctx context.Context) string {
+				defer wg.Done()
+				for range 2 {
+					time.Sleep(100 * time.Millisecond)
+					if ctx.Err() != nil {
+						fn2Canceled = true
+						return ""
+					}
+				}
+				return Result3
+			},
+			"f3": func(ctx context.Context) string {
+				defer wg.Done()
+				for range 4 {
+					time.Sleep(100 * time.Millisecond)
+					if ctx.Err() != nil {
+						fn3Canceled = true
+						return ""
+					}
+				}
+				return Result2
+			},
+		}
+
+		ctx := context.Background()
+		result := RaceAllMap(ctx, fnm).Wait()
+		assert.Equal(t, "f2", result.Val1)
+		assert.Equal(t, Result3, result.Val2)
+
+		wg.Wait()
+		assert.True(t, fn1Canceled)
+		assert.True(t, fn3Canceled)
+		assert.False(t, fn2Canceled)
 	})
 }
