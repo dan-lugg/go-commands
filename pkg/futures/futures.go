@@ -1,4 +1,4 @@
-package async
+package futures
 
 import (
 	"context"
@@ -14,17 +14,19 @@ type Future[R any] interface {
 }
 
 type future[R any] struct {
-	result    R
-	waitGroup sync.WaitGroup
+	wg     sync.WaitGroup
+	result R
 }
 
 // Wait blocks until the computation represented by the Future is complete
 // and returns the result of the computation.
 func (f *future[R]) Wait() R {
-	f.waitGroup.Wait()
+	f.wg.Wait()
 	return f.result
 }
 
+// FutureFunc is a function type that represents a computation
+// that takes a context and returns a result of type R.
 type FutureFunc[R any] func(ctx context.Context) R
 
 // Start begins a computation that runs the provided function fn in a separate goroutine.
@@ -32,9 +34,9 @@ type FutureFunc[R any] func(ctx context.Context) R
 // The provided ctx is passed to the function fn to support context-aware operations.
 func Start[R any](ctx context.Context, fn FutureFunc[R]) Future[R] {
 	f := future[R]{}
-	f.waitGroup.Add(1)
+	f.wg.Add(1)
 	go func() {
-		defer f.waitGroup.Done()
+		defer f.wg.Done()
 		f.result = fn(ctx)
 	}()
 	return &f

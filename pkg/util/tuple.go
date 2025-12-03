@@ -1,7 +1,5 @@
 package util
 
-type Option[TAny any] func(TAny)
-
 type Tuple interface {
 	Len() int
 	Values() []any

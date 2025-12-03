@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	commands2 "github.com/dan-lugg/go-commands/pkg/commands"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,32 +28,32 @@ func Test_MappingCatalog_Insert(t *testing.T) {
 	t.Run("empty catalog", func(t *testing.T) {
 		catalog := DefaultMappingCatalog{}
 		assert.Nil(t, catalog.nameMappings)
-		catalog.Insert(AddReqName, reflect.TypeFor[AddCommandReq]())
+		catalog.Insert(commands2.AddReqName, reflect.TypeFor[commands2.AddCommandReq]())
 		assert.NotEmpty(t, catalog.nameMappings)
-		assert.Contains(t, catalog.nameMappings, AddReqName)
+		assert.Contains(t, catalog.nameMappings, commands2.AddReqName)
 	})
 
 	t.Run("constructed catalog", func(t *testing.T) {
 		catalog := NewDefaultMappingCatalog()
 		assert.NotNil(t, catalog)
-		catalog.Insert(AddReqName, reflect.TypeFor[AddCommandReq]())
+		catalog.Insert(commands2.AddReqName, reflect.TypeFor[commands2.AddCommandReq]())
 		assert.NotEmpty(t, catalog.nameMappings)
-		assert.Contains(t, catalog.nameMappings, AddReqName)
+		assert.Contains(t, catalog.nameMappings, commands2.AddReqName)
 	})
 }
 
 func Test_MappingCatalog_ByName(t *testing.T) {
 	catalog := NewDefaultMappingCatalog()
-	InsertMapping[AddCommandReq](catalog, AddReqName)
+	InsertMapping[commands2.AddCommandReq](catalog, commands2.AddReqName)
 
 	t.Run("default", func(t *testing.T) {
-		reqType, err := catalog.ByName(AddReqName)
+		reqType, err := catalog.ByName(commands2.AddReqName)
 		assert.NoError(t, err)
-		assert.Equal(t, reflect.TypeFor[AddCommandReq](), reqType)
+		assert.Equal(t, reflect.TypeFor[commands2.AddCommandReq](), reqType)
 	})
 
 	t.Run("mapping missing", func(t *testing.T) {
-		reqType, err := catalog.ByName(SubReqName)
+		reqType, err := catalog.ByName(commands2.SubReqName)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, ErrMappingMissing)
 		assert.Nil(t, reqType)
@@ -61,16 +62,16 @@ func Test_MappingCatalog_ByName(t *testing.T) {
 
 func Test_MappingCatalog_ByType(t *testing.T) {
 	catalog := NewDefaultMappingCatalog()
-	InsertMapping[AddCommandReq](catalog, AddReqName)
+	InsertMapping[commands2.AddCommandReq](catalog, commands2.AddReqName)
 
 	t.Run("default", func(t *testing.T) {
-		reqType, err := catalog.ByType(reflect.TypeFor[AddCommandReq]())
+		reqType, err := catalog.ByType(reflect.TypeFor[commands2.AddCommandReq]())
 		assert.NoError(t, err)
-		assert.Equal(t, AddReqName, reqType)
+		assert.Equal(t, commands2.AddReqName, reqType)
 	})
 
 	t.Run("mapping missing", func(t *testing.T) {
-		reqType, err := catalog.ByType(reflect.TypeFor[SubCommandReq]())
+		reqType, err := catalog.ByType(reflect.TypeFor[commands2.SubCommandReq]())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, ErrMappingMissing)
 		assert.Empty(t, reqType)

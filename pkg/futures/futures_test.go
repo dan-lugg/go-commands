@@ -1,4 +1,4 @@
-package async
+package futures
 
 import (
 	"context"
@@ -15,6 +15,10 @@ const (
 	Result2 = "result 2"
 	Result3 = "result 3"
 )
+
+func Test_Multi(t *testing.T) {
+
+}
 
 func Test_Start(t *testing.T) {
 	t.Run("default", func(t *testing.T) {

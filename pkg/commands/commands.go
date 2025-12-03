@@ -2,18 +2,22 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"sync"
+
+	"github.com/dan-lugg/go-commands/pkg/futures"
+	"github.com/dan-lugg/go-commands/pkg/util"
 )
 
 var (
 	ErrDecoderMissing = errors.New("decoder missing")
 	ErrDecoderFailure = errors.New("decoder failure")
+	ErrHandlerMissing = errors.New("handler missing")
+	ErrInvalidReqType = errors.New("invalid req type")
+	ErrInvalidResType = errors.New("invalid res type")
 )
-
-// handler
-// decoder
 
 type CommandRes any
 
@@ -23,67 +27,161 @@ type Handler[TReq CommandReq[TRes], TRes CommandRes] interface {
 	Handle(ctx context.Context, req TReq) (res TRes, err error)
 }
 
-type Decoder interface {
-	Decode(reqData []byte) (req CommandReq[CommandRes], err error)
+type HandlerFactoryFunc[TReq CommandReq[TRes], TRes CommandRes] func() Handler[TReq, TRes]
+
+type HandlerAdapter interface {
+	ReqType() reflect.Type
+	ResType() reflect.Type
+	Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error)
 }
 
-type CompositeDecoder struct {
-	decoders []Decoder
+type DefaultHandlerAdapter[TReq CommandReq[TRes], TRes CommandRes] struct {
+	mutex          sync.RWMutex
+	handler        Handler[TReq, TRes]
+	handlerFactory HandlerFactoryFunc[TReq, TRes]
 }
 
-func NewCompositeDecoder() *CompositeDecoder {
-	return &CompositeDecoder{
-		decoders: make([]Decoder, 0),
+func NewDefaultHandlerAdapter[TReq CommandReq[TRes], TRes CommandRes](factory HandlerFactoryFunc[TReq, TRes]) *DefaultHandlerAdapter[TReq, TRes] {
+	return &DefaultHandlerAdapter[TReq, TRes]{
+		mutex:          sync.RWMutex{},
+		handler:        nil,
+		handlerFactory: factory,
 	}
 }
 
-func (c *CompositeDecoder) AddDecoder(decoder Decoder) {
-	c.decoders = append(c.decoders, decoder)
+func (a *DefaultHandlerAdapter[TReq, TRes]) Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error) {
+	typedReq, ok := req.(TReq)
+	if !ok {
+		return nil, fmt.Errorf("req type %T does not match %T", req, typedReq)
+	}
+	a.mutex.RLock()
+	handler := a.handler
+	a.mutex.RUnlock()
+	if handler == nil {
+		func() {
+			a.mutex.Lock()
+			defer a.mutex.Unlock()
+			if a.handler == nil {
+				a.handler = a.handlerFactory()
+			}
+		}()
+		handler = a.handler
+	}
+	if handler == nil {
+		return nil, fmt.Errorf("%w for req type: %s", ErrHandlerMissing, a.ReqType())
+	}
+	return handler.Handle(ctx, typedReq)
 }
 
-func (c *CompositeDecoder) Decode(reqData []byte) (req CommandReq[CommandRes], err error) {
-	if len(c.decoders) == 0 {
-		return nil, fmt.Errorf("%w: no decoders registered", ErrDecoderMissing)
+func (a *DefaultHandlerAdapter[TReq, TRes]) ReqType() reflect.Type {
+	return reflect.TypeFor[TReq]()
+}
+
+func (a *DefaultHandlerAdapter[TReq, TRes]) ResType() reflect.Type {
+	return reflect.TypeFor[TRes]()
+}
+
+type HandlerCatalog interface {
+	Insert(adapter HandlerAdapter)
+	Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error)
+	Future(ctx context.Context, req CommandReq[CommandRes]) futures.Future[util.Tuple2[CommandRes, error]]
+	TypeMap() map[reflect.Type]reflect.Type
+}
+
+type DefaultHandlerCatalog struct {
+	mutex    sync.RWMutex
+	adapters map[reflect.Type]HandlerAdapter
+}
+
+type NewDefaultHandlerCatalogOption = util.Option[*DefaultHandlerCatalog]
+
+func NewDefaultHandlerCatalog(options ...NewDefaultHandlerCatalogOption) *DefaultHandlerCatalog {
+	catalog := &DefaultHandlerCatalog{
+		mutex:    sync.RWMutex{},
+		adapters: make(map[reflect.Type]HandlerAdapter),
 	}
-	for _, decoder := range c.decoders {
-		req, err = decoder.Decode(reqData)
+	for _, option := range options {
+		option(catalog)
+	}
+	return catalog
+}
+
+func (r *DefaultHandlerCatalog) Insert(adapter HandlerAdapter) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	if r.adapters == nil {
+		r.adapters = make(map[reflect.Type]HandlerAdapter)
+	}
+	r.adapters[adapter.ReqType()] = adapter
+}
+
+func (r *DefaultHandlerCatalog) Handle(ctx context.Context, req CommandReq[CommandRes]) (res CommandRes, err error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	reqType := reflect.TypeOf(req)
+	adapter, found := r.adapters[reqType]
+	if !found {
+		return nil, fmt.Errorf("%w for req type: %s", ErrHandlerMissing, reqType)
+	}
+	return adapter.Handle(ctx, req)
+}
+
+func Handle[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *DefaultHandlerCatalog, req TReq) (typedRes TRes, err error) {
+	res, err := catalog.Handle(ctx, req)
+	if errors.Is(err, ErrHandlerMissing) {
+		return *new(TRes), err
+	}
+	var ok bool
+	if typedRes, ok = res.(TRes); !ok {
+		return *new(TRes), fmt.Errorf("%w %T was unexpected for %T", ErrInvalidResType, res, typedRes)
+	}
+	return typedRes, err
+}
+
+func (r *DefaultHandlerCatalog) Future(ctx context.Context, req CommandReq[CommandRes]) futures.Future[util.Tuple2[CommandRes, error]] {
+	return futures.Start(ctx, func(ctx context.Context) util.Tuple2[CommandRes, error] {
+		res, err := r.Handle(ctx, req)
+		return util.Tuple2[CommandRes, error]{
+			Val1: res,
+			Val2: err,
+		}
+	})
+}
+
+func Future[TReq CommandReq[TRes], TRes CommandRes](ctx context.Context, catalog *DefaultHandlerCatalog, req TReq) futures.Future[util.Tuple2[TRes, error]] {
+	return futures.Start(ctx, func(ctx context.Context) util.Tuple2[TRes, error] {
+		tup := catalog.Future(ctx, req).Wait()
+		res, err := tup.Val1, tup.Val2
 		if err != nil {
-			continue
+			return util.Tuple2[TRes, error]{
+				Val1: *new(TRes),
+				Val2: err,
+			}
 		}
-		return req, nil
-	}
-	return nil, fmt.Errorf("%w: all decoders failed", ErrDecoderFailure)
+		typedRes, ok := res.(TRes)
+		if !ok {
+			return util.Tuple2[TRes, error]{
+				Val1: *new(TRes),
+				Val2: fmt.Errorf("%w %T was unexpected for %T", ErrInvalidResType, res, typedRes),
+			}
+		}
+		return util.Tuple2[TRes, error]{
+			Val1: typedRes,
+			Val2: err,
+		}
+	})
 }
 
-type JSONDecoder struct{}
-
-func (d *JSONDecoder) Decode(reqData []byte) (req CommandReq[CommandRes], err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%v", r)
-		}
-	}()
-	err = json.Unmarshal(reqData, &req)
-	if err != nil {
-		var syntaxErr *json.SyntaxError
-		if errors.As(err, &syntaxErr) {
-			return nil, fmt.Errorf("%w: at byte offset %d", err, syntaxErr.Offset)
-		}
-		var unmarshalTypeErr *json.UnmarshalTypeError
-		if errors.As(err, &unmarshalTypeErr) {
-			return nil, fmt.Errorf("%w: at byte offset %d", err, unmarshalTypeErr.Offset)
-		}
-	}
-	return req, nil
+func InsertHandler[TReq CommandReq[TRes], TRes CommandRes](catalog *DefaultHandlerCatalog, factory HandlerFactoryFunc[TReq, TRes]) {
+	catalog.Insert(NewDefaultHandlerAdapter(factory))
 }
 
-type YAMLDecoder struct{}
-
-func (d *YAMLDecoder) Decode(reqData []byte) (req CommandReq[CommandRes], err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%v", r)
-		}
-	}()
-	return nil, fmt.Errorf("YAMLDecoder not implemented")
+func (r *DefaultHandlerCatalog) TypeMap() (typeMap map[reflect.Type]reflect.Type) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	typeMap = make(map[reflect.Type]reflect.Type, len(r.adapters))
+	for reqType, adapter := range r.adapters {
+		typeMap[reqType] = adapter.ResType()
+	}
+	return typeMap
 }
