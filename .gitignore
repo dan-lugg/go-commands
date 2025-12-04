@@ -51,3 +51,5 @@ go.work.sum
 # env file
 .env
 
+# explicit .ignored files
+*.ignored
