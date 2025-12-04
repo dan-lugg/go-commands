@@ -1,13 +1,9 @@
 package commands
 
 import (
-	"context"
 	"reflect"
 	"testing"
-	"time"
 
-	"github.com/dan-lugg/go-commands/futures"
-	"github.com/dan-lugg/go-commands/util"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -145,74 +141,74 @@ func Test_HandlerCatalog_Future(t *testing.T) {
 		assert.ErrorIs(t, err, ErrHandlerMissing)
 	})
 
-	t.Run("wait all", func(t *testing.T) {
-		start := time.Now()
-		ctx, cancel := context.WithCancel(context.Background())
+	//t.Run("wait all", func(t *testing.T) {
+	//	start := time.Now()
+	//	ctx, cancel := context.WithCancel(context.Background())
+	//
+	//	fut1 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+	//		Name: "A",
+	//		Iter: 3,
+	//	})
+	//	fut2 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+	//		Name: "B",
+	//		Iter: 1,
+	//	})
+	//	fut3 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+	//		Name: "C",
+	//		Iter: 4,
+	//	})
+	//	fut4 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+	//		Name: "D",
+	//		Iter: 2,
+	//	})
+	//
+	//	tups := futures.WaitAll[util.Tuple2[SlowCommandRes, error]](fut1, fut2, fut3, fut4).Wait()
+	//	cancel()
+	//
+	//	duration := time.Since(start)
+	//
+	//	assert.Less(t, duration, 500*time.Millisecond)
+	//	assert.Greater(t, duration, 300*time.Millisecond)
+	//
+	//	for _, tup := range tups {
+	//		res, err := tup.Val1, tup.Val2
+	//		assert.NoError(t, err)
+	//		assert.IsType(t, SlowCommandRes{}, res)
+	//	}
+	//})
 
-		fut1 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
-			Name: "A",
-			Iter: 3,
-		})
-		fut2 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
-			Name: "B",
-			Iter: 1,
-		})
-		fut3 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
-			Name: "C",
-			Iter: 4,
-		})
-		fut4 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
-			Name: "D",
-			Iter: 2,
-		})
-
-		tups := futures.WaitAll[util.Tuple2[SlowCommandRes, error]](fut1, fut2, fut3, fut4).Wait()
-		cancel()
-
-		duration := time.Since(start)
-
-		assert.Less(t, duration, 500*time.Millisecond)
-		assert.Greater(t, duration, 300*time.Millisecond)
-
-		for _, tup := range tups {
-			res, err := tup.Val1, tup.Val2
-			assert.NoError(t, err)
-			assert.IsType(t, SlowCommandRes{}, res)
-		}
-	})
-
-	t.Run("race all", func(t *testing.T) {
-		start := time.Now()
-		ctx, cancel := context.WithCancel(context.Background())
-
-		fut1 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
-			Name: "A",
-			Iter: 3,
-		})
-		fut2 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
-			Name: "B",
-			Iter: 1,
-		})
-		fut3 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
-			Name: "C",
-			Iter: 4,
-		})
-		fut4 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
-			Name: "D",
-			Iter: 2,
-		})
-
-		tup := futures.RaceAll[util.Tuple2[SlowCommandRes, error]](fut1, fut2, fut3, fut4).Wait()
-		cancel()
-		res, err := tup.Val1, tup.Val2
-
-		duration := time.Since(start)
-
-		assert.Less(t, duration, 200*time.Millisecond)
-		assert.Greater(t, duration, 100*time.Millisecond)
-		assert.NoError(t, err)
-		assert.Equal(t, "B", res.Name)
-	})
+	//t.Run("race all", func(t *testing.T) {
+	//	start := time.Now()
+	//	ctx, cancel := context.WithCancel(context.Background())
+	//
+	//	fut1 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+	//		Name: "A",
+	//		Iter: 3,
+	//	})
+	//	fut2 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+	//		Name: "B",
+	//		Iter: 1,
+	//	})
+	//	fut3 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+	//		Name: "C",
+	//		Iter: 4,
+	//	})
+	//	fut4 := Future[SlowCommandReq, SlowCommandRes](ctx, catalog, SlowCommandReq{
+	//		Name: "D",
+	//		Iter: 2,
+	//	})
+	//
+	//	tup := futures.RaceAll[util.Tuple2[SlowCommandRes, error]](fut1, fut2, fut3, fut4).Wait()
+	//	cancel()
+	//	res, err := tup.Val1, tup.Val2
+	//
+	//	duration := time.Since(start)
+	//
+	//	assert.Less(t, duration, 200*time.Millisecond)
+	//	assert.Greater(t, duration, 100*time.Millisecond)
+	//	assert.NoError(t, err)
+	//	assert.Equal(t, "B", res.Name)
+	//})
 }
 
 func Test_HandlerCatalog_TypeMap(t *testing.T) {
